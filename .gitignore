@@ -1,5 +1,4 @@
 .stack-work/
-DemiGen.cabal
 *~
 *.log
 *.lock

@@ -1,6 +1,6 @@
 module Main where
 
-import Lib
+import TileGen
 
 main :: IO ()
-main = someFunc
+main = putStr "test"

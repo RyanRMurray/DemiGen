@@ -39,6 +39,8 @@ executables:
     - MonadRandom
     - containers
     - JuicyPixels
+    - xml-conduit
+    - xml-lens
 
 tests:
   DemiGen-test:
