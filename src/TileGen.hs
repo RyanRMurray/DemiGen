@@ -1,13 +1,13 @@
 module TileGen where
-    import Util (readRational)
-    import Data.List
-    import Data.Maybe
+    import           Codec.Picture
+    import           Control.Monad
+    import           Data.List
+    import           Data.List.Split
     import qualified Data.Map as Map
-    import Data.Map (Map)
-    import Text.XML.Light
-    import Data.List.Split
-    import Codec.Picture
-    import Control.Monad
+    import           Data.Map (Map)
+    import           Data.Maybe
+    import           Text.XML.Light
+    import           Util (readRational)
 
     data Rot = N | W | S | E deriving (Show)
     data Tile = Tile 
@@ -17,15 +17,15 @@ module TileGen where
         } deriving (Show)
 
     data TileConfiguration = TileConfiguration Integer Rot deriving (Show)
-    data Neighbor = Neighbour
+    data Neighbor = Neighbor
         { left     :: TileConfiguration
         , right    :: TileConfiguration
         } deriving (Show)
 
     data TileData = TileData
-        { tiles :: [Tile]
-        , validNeighbours :: [Neighbor]
-        , images :: [DynamicImage]
+        { tiles          :: [Tile]
+        , validNeighbors :: [Neighbor]
+        , images         :: [DynamicImage]
         }
     
     type CoOrd = (Integer, Integer)
@@ -33,7 +33,7 @@ module TileGen where
 
     --Functions for importing tile data from XML files
     --Functions assume a correctly-formatted input
-    ---------------------------------------------------------------------------------------------------
+    -------------------------------------------------------------------------------------
     --return Just the requested element
     findEl :: String -> Element -> Element
     findEl name parent = fromJust $ findElement (unqual name) parent
@@ -55,7 +55,7 @@ module TileGen where
         let tSymms   = map (justAttr "symmetry") xTiles
         let tWeights = map (justAttr "weight") xTiles
         let tiles    = map mkTile $ zip3 tNames tSymms tWeights
-        --get neighbours
+        --get neighbors
         let xNeighbors = elChildren $ findEl "neighbors" $ findEl "set" $ fromJust xml
         let lNeighbor  = map (justAttr "left") xNeighbors
         let rNeighbor  = map (justAttr "right") xNeighbors
@@ -70,9 +70,10 @@ module TileGen where
     mkTile :: (String, String, String) -> Tile
     mkTile (name, sym, weight) = Tile name sym (readRational weight)
 
-    --make a valid neighbour pair from the name of two tiles
+    --make a valid neighbor pair from the name of two tiles
     mkNeighbors :: [String] -> (String, String) -> Neighbor
-    mkNeighbors ts (l, r) = Neighbour (mkConfig ts (splitOn " " l)) (mkConfig ts  (splitOn " " r))
+    mkNeighbors ts (l, r) = 
+        Neighbor (mkConfig ts (splitOn " " l)) (mkConfig ts (splitOn " " r))
 
     --make a TileConfiguration from the name of the tile and an integer representing its rotation
     mkConfig :: [String] -> [String] -> TileConfiguration
@@ -84,12 +85,17 @@ module TileGen where
     mkConfig' id ts = toInteger $ fromJust $ elemIndex id ts
 
     --Functions for printing
-    -------------------------------------------------------------------------------------------------
+    -------------------------------------------------------------------------------------
     
     gridX = 1
     gridY = 1
 
-    testgrid = Map.fromList [((0,0), TileConfiguration 0 N),((0,1), TileConfiguration 1 N),((1,0), TileConfiguration 1 N),((1,1), TileConfiguration 0 N)]
+    testgrid = Map.fromList 
+        [ ((0,0), TileConfiguration 0 N)
+        , ((0,1), TileConfiguration 1 N)
+        , ((1,0), TileConfiguration 1 N)
+        , ((1,1), TileConfiguration 0 N)
+        ]
 
     --extract the image IDs for each panel in the grid, with -1 defaults
     getImageIDGrid :: OutGrid -> [[Integer]]
