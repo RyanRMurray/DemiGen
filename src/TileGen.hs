@@ -1,7 +1,7 @@
 module TileGen where
-    import           Codec.Picture
+    import Graphics.Image
     import           Control.Monad
-    import           Data.List
+    import           Data.List as L
     import           Data.List.Split
     import qualified Data.Map as Map
     import           Data.Map (Map)
@@ -25,11 +25,12 @@ module TileGen where
     data TileData = TileData
         { tiles          :: [Tile]
         , validNeighbors :: [Neighbor]
-        , images         :: [DynamicImage]
+        , images         :: [TileImg]
         }
     
     type CoOrd = (Integer, Integer)
     type OutGrid = (Map CoOrd TileConfiguration)
+    type TileImg = Image VS RGBA Word16
 
     --Functions for importing tile data from XML files
     --Functions assume a correctly-formatted input
@@ -51,20 +52,23 @@ module TileGen where
         xml <- parseXMLDoc <$> readFile (fpath ++ "data.xml")
         --get tiles
         let xTiles   = elChildren $ findEl "tiles" $ findEl "set" $ fromJust xml
-        let tNames   = map (justAttr "name") xTiles
-        let tSymms   = map (justAttr "symmetry") xTiles
-        let tWeights = map (justAttr "weight") xTiles
-        let tiles    = map mkTile $ zip3 tNames tSymms tWeights
+        let tNames   = L.map (justAttr "name") xTiles
+        let tSymms   = L.map (justAttr "symmetry") xTiles
+        let tWeights = L.map (justAttr "weight") xTiles
+        let tiles    = L.map mkTile $ zip3 tNames tSymms tWeights
         --get neighbors
         let xNeighbors = elChildren $ findEl "neighbors" $ findEl "set" $ fromJust xml
-        let lNeighbor  = map (justAttr "left") xNeighbors
-        let rNeighbor  = map (justAttr "right") xNeighbors
-        let neighbors  = map (mkNeighbors tNames) $ zip lNeighbor rNeighbor
+        let lNeighbor  = L.map (justAttr "left") xNeighbors
+        let rNeighbor  = L.map (justAttr "right") xNeighbors
+        let neighbors  = L.map (mkNeighbors tNames) $ zip lNeighbor rNeighbor
         --get images
-        images <- sequence <$> mapM (\n -> readImage $ fpath ++ n ++ ".png") tNames 
+        images <- sequence <$> mapM (\n -> readPNG $ fpath ++ n ++ ".png") tNames 
         case images of
             Left err -> return $ Left err
             Right is -> return $ Right $ TileData tiles neighbors is
+
+    readPNG :: String -> IO (Either String (TileImg))
+    readPNG fpath = readImageExact PNG fpath
 
     --make tile from truple
     mkTile :: (String, String, String) -> Tile
@@ -87,8 +91,15 @@ module TileGen where
     --Functions for printing
     -------------------------------------------------------------------------------------
     
+    testOut = writeImageExact PNG [] "test.png" defaultTile
+
+    defaultTile :: TileImg
+    defaultTile = makeImage (tileSize,tileSize) (defaultTilePixel) :: Image VS RGBA Word16
+    defaultTilePixel (x,y) = PixelRGBA 0 0 0 0
+
     gridX = 1
     gridY = 1
+    tileSize = 3
 
     testgrid = Map.fromList 
         [ ((0,0), TileConfiguration 0 N)
@@ -109,3 +120,19 @@ module TileGen where
     
     getImageID :: TileConfiguration -> Integer
     getImageID (TileConfiguration i _) = i
+
+    printGrid :: [TileImg] -> [[Integer]] -> TileImg
+    printGrid imgs (l:ls) = foldl topToBottom 
+        (printGridLine imgs l)
+        [printGridLine imgs line | line <- ls]
+
+    printGridLine :: [TileImg] -> [Integer] -> TileImg
+    printGridLine imgs (id:ids) = foldl leftToRight 
+        (printGridTile imgs id)
+        [printGridTile imgs i | i <- ids]
+
+    printGridTile :: [TileImg] -> Integer -> TileImg
+    printGridTile imgs (-1) = defaultTile
+    printGridTile imgs id   = imgs !! (fromIntegral id)
+
+    --TODO CHECK PRINT FUNCTIONS

@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 6503d0d84329b28d89178cbd908fe037c85420646d9c3a143409e7b6e47d7e35
+-- hash: bab12c5c699cf431a0b3fbff147c692d4fbf38a3ea9cf8d1c6cd6928877243ac
 
 name:           DemiGen
 version:        0.1.0.0
@@ -38,6 +38,7 @@ library
     , base >=4.7 && <5
     , containers
     , ghc
+    , hip
     , random
     , split
     , xml
@@ -57,6 +58,7 @@ executable DemiGen-exe
     , base >=4.7 && <5
     , containers
     , ghc
+    , hip
     , random
     , split
     , xml
@@ -77,6 +79,7 @@ test-suite DemiGen-test
     , base >=4.7 && <5
     , containers
     , ghc
+    , hip
     , random
     , split
     , xml
