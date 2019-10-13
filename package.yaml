@@ -20,6 +20,13 @@ extra-source-files:
 description:         Please see the README on GitHub at <https://github.com/RyanRMurray/DemiGen#readme>
 
 dependencies:
+- random
+- MonadRandom
+- containers
+- JuicyPixels
+- xml
+- ghc
+- split
 - base >= 4.7 && < 5
 
 library:
@@ -35,12 +42,6 @@ executables:
     - -with-rtsopts=-N
     dependencies:
     - DemiGen
-    - random
-    - MonadRandom
-    - containers
-    - JuicyPixels
-    - xml-conduit
-    - xml-lens
 
 tests:
   DemiGen-test:
