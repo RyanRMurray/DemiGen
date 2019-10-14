@@ -1,11 +1,18 @@
 module TileGen where
-    import Graphics.Image
-    import           Control.Monad
+    import           Graphics.Image
+
+    import           Control.Monad.Random
+    import           System.Random
+
     import           Data.List as L
     import           Data.List.Split
+    import           Data.Ix (range)
+
     import qualified Data.Map as Map
     import           Data.Map (Map)
+
     import           Data.Maybe
+
     import           Text.XML.Light
     import           Util (readRational)
 
@@ -25,16 +32,29 @@ module TileGen where
     data TileData = TileData
         { tiles          :: [Tile]
         , validNeighbors :: [Neighbor]
-        , images         :: [TileImg]
         }
     
     type CoOrd = (Integer, Integer)
     type OutGrid = (Map CoOrd TileConfiguration)
-    type TileImg = Image VS RGBA Word16
+    type TileImg = Image VS RGB Word8
 
-    --Functions for importing tile data from XML files
-    --Functions assume a correctly-formatted input
-    -------------------------------------------------------------------------------------
+    --test variables    
+    gridX = 10
+    gridY = 10
+    tileSize = 3
+
+    testcoords = range ((0,0), (gridX,gridY))
+
+    testgrid = Map.fromList 
+        [ ((0,0), TileConfiguration 0 N)
+        , ((0,1), TileConfiguration 1 N)
+        , ((1,0), TileConfiguration 1 N)
+        , ((1,1), TileConfiguration 0 N)
+        ]
+
+--Functions for importing tile data from XML files
+--Functions assume a correctly-formatted input
+-------------------------------------------------------------------------------------
     --return Just the requested element
     findEl :: String -> Element -> Element
     findEl name parent = fromJust $ findElement (unqual name) parent
@@ -47,25 +67,21 @@ module TileGen where
         _      -> "0.0"
 
     --get tiles and neoighbours data
-    getTileData :: FilePath -> IO (Either String TileData)
-    getTileData fpath = do
-        xml <- parseXMLDoc <$> readFile (fpath ++ "data.xml")
-        --get tiles
-        let xTiles   = elChildren $ findEl "tiles" $ findEl "set" $ fromJust xml
-        let tNames   = L.map (justAttr "name") xTiles
-        let tSymms   = L.map (justAttr "symmetry") xTiles
-        let tWeights = L.map (justAttr "weight") xTiles
-        let tiles    = L.map mkTile $ zip3 tNames tSymms tWeights
-        --get neighbors
-        let xNeighbors = elChildren $ findEl "neighbors" $ findEl "set" $ fromJust xml
-        let lNeighbor  = L.map (justAttr "left") xNeighbors
-        let rNeighbor  = L.map (justAttr "right") xNeighbors
-        let neighbors  = L.map (mkNeighbors tNames) $ zip lNeighbor rNeighbor
-        --get images
-        images <- sequence <$> mapM (\n -> readPNG $ fpath ++ n ++ ".png") tNames 
-        case images of
-            Left err -> return $ Left err
-            Right is -> return $ Right $ TileData tiles neighbors is
+    getTileData :: Element -> TileData
+    getTileData xml =
+        let 
+            --get tiles
+            xTiles   = elChildren $ findEl "tiles" $ findEl "set" $ xml
+            tNames   = L.map (justAttr "name") xTiles
+            tSymms   = L.map (justAttr "symmetry") xTiles
+            tWeights = L.map (justAttr "weight") xTiles
+            tiles    = L.map mkTile $ zip3 tNames tSymms tWeights
+            --get neighbors
+            xNeighbors = elChildren $ findEl "neighbors" $ findEl "set" $ xml
+            lNeighbor  = L.map (justAttr "left") xNeighbors
+            rNeighbor  = L.map (justAttr "right") xNeighbors
+            neighbors  = L.map (mkNeighbors tNames) $ zip lNeighbor rNeighbor
+        in (TileData tiles neighbors)
 
     readPNG :: String -> IO (Either String (TileImg))
     readPNG fpath = readImageExact PNG fpath
@@ -88,26 +104,13 @@ module TileGen where
 
     mkConfig' id ts = toInteger $ fromJust $ elemIndex id ts
 
-    --Functions for printing
-    -------------------------------------------------------------------------------------
+--Functions for printing
+-------------------------------------------------------------------------------------
     
-    testOut = writeImageExact PNG [] "test.png" defaultTile
-
     defaultTile :: TileImg
-    defaultTile = makeImage (tileSize,tileSize) (defaultTilePixel) :: Image VS RGBA Word16
-    defaultTilePixel (x,y) = PixelRGBA 0 0 0 0
-
-    gridX = 1
-    gridY = 1
-    tileSize = 3
-
-    testgrid = Map.fromList 
-        [ ((0,0), TileConfiguration 0 N)
-        , ((0,1), TileConfiguration 1 N)
-        , ((1,0), TileConfiguration 1 N)
-        , ((1,1), TileConfiguration 0 N)
-        ]
-
+    defaultTile = makeImage (tileSize,tileSize) (defaultTilePixel) :: TileImg
+    defaultTilePixel (x,y) = PixelRGB 255 0 127
+    
     --extract the image IDs for each panel in the grid, with -1 defaults
     getImageIDGrid :: OutGrid -> [[Integer]]
     getImageIDGrid grid = [getImageIDLine grid y | y <- [0..gridY]]
@@ -135,4 +138,29 @@ module TileGen where
     printGridTile imgs (-1) = defaultTile
     printGridTile imgs id   = imgs !! (fromIntegral id)
 
-    --TODO CHECK PRINT FUNCTIONS
+
+    --main function
+    outputMap :: FilePath -> Integer -> Integer -> IO ()
+    outputMap fpath x y = do
+        --get tiles and their neighbour data
+        Right xml <- checkXML <$> (parseXMLDoc <$> readFile (fpath ++ "data.xml"))
+        let tData = getTileData xml
+        --get image files for tiles
+        Right images <- sequence <$> mapM (\n -> readPNG $ fpath ++ n ++ ".png") (L.map tileName (tiles tData)) 
+        --get seed
+        putStrLn "Enter a seed number:"
+        seed <- getLine
+        putStrLn "todo"
+
+    checkXML :: Maybe Element -> Either String Element
+    checkXML file = 
+        case file of
+            Just xml -> Right xml
+            _        -> Left "Failed to load data.xml from specified folder."
+
+
+    startGen :: StdGen -> [CoOrd] -> TileData -> OutGrid
+    startGen seed grid tData = undefined
+
+    generateMap :: StdGen -> [CoOrd] -> TileData -> Either StdGen OutGrid
+    generateMap = undefined
