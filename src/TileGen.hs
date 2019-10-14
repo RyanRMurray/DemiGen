@@ -23,7 +23,10 @@ module TileGen where
         , weighting :: Rational
         } deriving (Show)
 
-    data TileConfiguration = TileConfiguration Integer Rot deriving (Show)
+    data TileConfiguration = TileConfiguration 
+        { tid ::Integer
+        , rotation :: Rot
+        } deriving (Show)
     data Neighbor = Neighbor
         { left     :: TileConfiguration
         , right    :: TileConfiguration
@@ -116,14 +119,11 @@ module TileGen where
     getImageIDGrid grid = [getImageIDLine grid y | y <- [0..gridY]]
 
     getImageIDLine :: OutGrid -> Integer -> [Integer]
-    getImageIDLine grid y = [getImageID $ getTile grid (x,y) | x <- [0..gridX]]
+    getImageIDLine grid y = [tid $ getTile grid (x,y) | x <- [0..gridX]]
 
     getTile :: OutGrid -> CoOrd -> TileConfiguration
     getTile grid coord = Map.findWithDefault (TileConfiguration (-1) N) coord grid
     
-    getImageID :: TileConfiguration -> Integer
-    getImageID (TileConfiguration i _) = i
-
     printGrid :: [TileImg] -> [[Integer]] -> TileImg
     printGrid imgs (l:ls) = foldl topToBottom 
         (printGridLine imgs l)
@@ -137,7 +137,6 @@ module TileGen where
     printGridTile :: [TileImg] -> Integer -> TileImg
     printGridTile imgs (-1) = defaultTile
     printGridTile imgs id   = imgs !! (fromIntegral id)
-
 
     --main function
     outputMap :: FilePath -> Integer -> Integer -> IO ()
