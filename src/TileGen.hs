@@ -19,6 +19,7 @@ module TileGen where
     data Rot = N | W | S | E deriving (Show)
     data SymType = X | T | I | L | Z deriving (Show)
     type TileImg = Image VS RGB Word8
+    type WTile = (Tile, Rational)
 
     data Tile = Tile
         { name :: String
@@ -133,3 +134,22 @@ module TileGen where
     rotateGridTile (Tile _ _ _ W i) = rotate270 i
     rotateGridTile (Tile _ _ _ S i) = rotate180 i
     rotateGridTile (Tile _ _ _ E i) = rotate90  i
+
+--Core Generator Functions
+---------------------------------------------------------------------------------------------------
+
+    startingWave :: [Tile] -> [CoOrd] -> Wave
+    startingWave ts cs = undefined
+    startingWave' ts   = zip [0.. length ts] [w | (Tile _ _ w _ _) <- ts]
+
+    collapseWave :: Wave -> [ValidPair] -> StdGen -> [CoOrd] -> CollapsedWave -> Either StdGen CollapsedWave
+    collapseWave _ _ _ [] cw = Right cw
+    
+    collapseWave input vPairs seed unvisited output = do
+        let
+            nextCoOrd = findNextTile input unvisited
+            (newTile, nextSeed) = Rand.runRand (Rand.fromList $ )
+        --todo: insert new tile, update unvisited, propogate in Wave
+
+
+
