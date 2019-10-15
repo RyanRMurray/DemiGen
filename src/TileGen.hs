@@ -38,6 +38,7 @@ module TileGen where
         }
     
     type CoOrd = (Integer, Integer)
+    type InGrid = (Map CoOrd [Integer])
     type OutGrid = (Map CoOrd TileConfiguration)
     type TileImg = Image VS RGB Word8
 
@@ -139,8 +140,8 @@ module TileGen where
     printGridTile imgs id   = imgs !! (fromIntegral id)
 
     --main function
-    outputMap :: FilePath -> Integer -> Integer -> IO ()
-    outputMap fpath x y = do
+    outputMap :: FilePath -> [CoOrd] -> InGrid -> IO ()
+    outputMap fpath canvas input = do
         --get tiles and their neighbour data
         Right xml <- checkXML <$> (parseXMLDoc <$> readFile (fpath ++ "data.xml"))
         let tData = getTileData xml
@@ -158,8 +159,12 @@ module TileGen where
             _        -> Left "Failed to load data.xml from specified folder."
 
 
-    startGen :: StdGen -> [CoOrd] -> TileData -> OutGrid
-    startGen seed grid tData = undefined
+    startGen :: TileData -> InGrid -> CoOrd -> StdGen -> OutGrid
+    startGen (Tiledata ) startGrid startPoint seed = 
+        case generateMap seed grid (validNeighbors tData) [sPoint] (Map.empty :: OutGrid) of
+            Left nseed -> startGen nseed grid tData sPoint
+            Right out  -> out
 
-    generateMap :: StdGen -> [CoOrd] -> TileData -> Either StdGen OutGrid
-    generateMap = undefined
+    generateMap :: [Neighbor] ->  InGrid -> [CoOrd] -> StdGen -> OutGrid -> Either StdGen OutGrid
+    generateMap _ _ _ [] out = Right out
+    generateMap seed input ns unvisited out = undefined
