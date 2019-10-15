@@ -6,6 +6,7 @@ module TileGen where
 
     import           Data.List as L
     import           Data.List.Split
+    import           Data.Ord
     import           Data.Ix (range)
 
     import qualified Data.Map as Map
@@ -39,9 +40,9 @@ module TileGen where
         , rRot  :: Rot
         } deriving (Show)
     
-    type CoOrd = (Integer, Integer)
-    type Wave = (Map CoOrd [Integer])
-    type CollapsedWave = (Map CoOrd Integer)
+    type CoOrd = (Int, Int)
+    type Wave = (Map CoOrd [(Int, Rational)])
+    type CollapsedWave = (Map CoOrd Int)
 
     gridX = 10
     gridY = 10
@@ -124,13 +125,13 @@ module TileGen where
         (makeGridRow ts w 0)
         [makeGridRow ts w y | y <- [1..gridY]]
 
-    makeGridRow :: [Tile] -> CollapsedWave -> Integer -> TileImg
+    makeGridRow :: [Tile] -> CollapsedWave -> Int -> TileImg
     makeGridRow ts w y = foldl leftToRight 
         (makeGridTile ts w (0,y))
         [makeGridTile ts w (x,y) | x <- [1..gridX]]
 
     makeGridTile :: [Tile] -> CollapsedWave -> CoOrd -> TileImg
-    makeGridTile ts w c = rotateGridTile $ ts !! fromIntegral (w Map.! c)
+    makeGridTile ts w c = rotateGridTile $ ts !! (w Map.! c)
 
     rotateGridTile :: Tile -> TileImg
     rotateGridTile (Tile _ _ _ N i) =           i
@@ -141,8 +142,10 @@ module TileGen where
 --Core Generator Functions
 ---------------------------------------------------------------------------------------------------
 
+    --generate wave with all tiles as possible candidates in all supplied coordinates
     startingWave :: [Tile] -> [CoOrd] -> Wave
-    startingWave ts cs = foldl (\c -> Map.insert c $ startingWave' ts) Map.empty cs 
+    startingWave ts cs = Map.fromList [(c, startingWave' ts)| c <- cs]
+    
     startingWave' ts   = zip [0.. length ts] [w | (Tile _ _ w _ _) <- ts]
 
     collapseWave :: Wave -> [ValidPair] -> StdGen -> [CoOrd] -> CollapsedWave -> Either StdGen CollapsedWave
@@ -150,14 +153,24 @@ module TileGen where
     
     collapseWave input vPairs seed unvisited collapsed = do
         let
-            nextCoOrd = findNextTile input unvisited
+            nextCoOrd           = findNextTile input unvisited
             (newTile, nextSeed) = Rand.runRand (Rand.fromList $ input Map.! nextCoOrd) seed
-            updatedCW = Map.insert nextCoOrd newTile collapsed
-            updateUnv = updateUnvisited input updatedCW unvisited nextCoOrd
-        --todo: insert new tile, update unvisited, propagate in Wave
+            updatedCW           = Map.insert nextCoOrd newTile collapsed
+            updatedUnv          = updateUnvisited input updatedCW unvisited nextCoOrd
+        --todo: propagate in Wave
+        return collapsed
 
     findNextTile :: Wave -> [CoOrd] -> CoOrd
     findNextTile w unvisited = fst $ minimumBy (comparing snd) [(c, length $ w Map.! c)| c <- unvisited]
 
     updateUnvisited :: Wave -> CollapsedWave -> [CoOrd] -> CoOrd -> [CoOrd]
-    updateUnvisited = undefined
+    updateUnvisited w cw unvisited visited = 
+        filter (\n -> Map.notMember n cw) (unvisited ++ getNeighbors w visited)
+
+    getNeighbors :: Wave -> CoOrd -> [CoOrd]
+    getNeighbors w (x,y) = filter (\n -> Map.member n w)
+        [ (x,y-1)
+        , (x-1,y)
+        , (x,y+1)
+        , (x+1,y)
+        ]
