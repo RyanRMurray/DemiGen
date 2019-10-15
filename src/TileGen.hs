@@ -20,12 +20,11 @@ module TileGen where
     import           System.Random
     import           Control.Monad.Random as Rand
 
-    data Rot = N | W | S | E deriving (Show)
-    data SymType = X | T | I | L | Z deriving (Show)
-    type TileImg = Image VS RGB Word8
-    type WTile = (Tile, Rational)
+    data Rot = N | W | S | E deriving (Show)          -- Specifies direction of 'top' of tile relative to 'North'
+    data SymType = X | T | I | L | Z deriving (Show)  -- Specifies the type of symmetry as seen in WaveFunctionCollapse
+    type TileImg = Image VS RGB Word8                 -- Type of image to import and export
 
-    data Tile = Tile
+    data Tile = Tile                                  -- Tiles imported from XML, both data and image
         { name :: String
         , symmetry :: SymType
         , weight   :: Rational
@@ -33,16 +32,16 @@ module TileGen where
         , image    :: TileImg
         }
 
-    data ValidPair = ValidPair
-        { lName :: String
+    data ValidPair = ValidPair                        -- Pairs of tiles at certain rotations that are considered valid
+        { lName :: String                             -- neighbours
         , lRot  :: Rot
         , rName :: String
         , rRot  :: Rot
         } deriving (Show)
     
-    type CoOrd = (Int, Int)
-    type Wave = (Map CoOrd [(Int, Rational)])
-    type CollapsedWave = (Map CoOrd Int)
+    type CoOrd = (Int, Int)                           -- Coordinates of tiles on an (x,y) plane
+    type Wave = (Map CoOrd [(Int, Rational)])         -- An uncollapsed wave containing valid tiles for all spaces
+    type CollapsedWave = (Map CoOrd Int)              -- A collapsed wave grid with IDs for all accepted tiles
 
     gridX = 10
     gridY = 10
