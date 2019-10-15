@@ -17,154 +17,119 @@ module TileGen where
     import           Util (readRational)
 
     data Rot = N | W | S | E deriving (Show)
-    data Tile = Tile 
-        { tileName  :: String
-        , symmetry  :: String
-        , weighting :: Rational
-        } deriving (Show)
-
-    data TileConfiguration = TileConfiguration 
-        { tid ::Integer
-        , rotation :: Rot
-        } deriving (Show)
-    data Neighbor = Neighbor
-        { left     :: TileConfiguration
-        , right    :: TileConfiguration
-        } deriving (Show)
-
-    data TileData = TileData
-        { tiles          :: [Tile]
-        , validNeighbors :: [Neighbor]
-        }
-    
-    type CoOrd = (Integer, Integer)
-    type InGrid = (Map CoOrd [Integer])
-    type OutGrid = (Map CoOrd TileConfiguration)
+    data SymType = X | T | I | L | Z deriving (Show)
     type TileImg = Image VS RGB Word8
 
-    --test variables    
+    data Tile = Tile
+        { name :: String
+        , symmetry :: SymType
+        , weight   :: Rational
+        , rotation :: Rot
+        , image    :: TileImg
+        }
+
+    data ValidPair = ValidPair
+        { lName :: String
+        , lRot  :: Rot
+        , rName :: String
+        , rRot  :: Rot
+        } deriving (Show)
+    
+    type CoOrd = (Integer, Integer)
+    type Wave = (Map CoOrd [Integer])
+    type CollapsedWave = (Map CoOrd Integer)
+
     gridX = 10
     gridY = 10
     tileSize = 3
 
-    testcoords = range ((0,0), (gridX,gridY))
+    defaultTile :: TileImg
+    defaultTile = makeImage (tileSize,tileSize) (defaultTilePixel) :: TileImg
+    defaultTilePixel (x,y) = PixelRGB 255 0 127
 
-    testgrid = Map.fromList 
-        [ ((0,0), TileConfiguration 0 N)
-        , ((0,1), TileConfiguration 1 N)
-        , ((1,0), TileConfiguration 1 N)
-        , ((1,1), TileConfiguration 0 N)
-        ]
+--Functions for reading from xml
+---------------------------------------------------------------------------------------------------
 
---Functions for importing tile data from XML files
---Functions assume a correctly-formatted input
--------------------------------------------------------------------------------------
     --return Just the requested element
     findEl :: String -> Element -> Element
     findEl name parent = fromJust $ findElement (unqual name) parent
-    
+
     --return Just the requested element. Since weightings can be blank, return default of 0 for them.
     justAttr :: String -> Element -> String
     justAttr a e = 
         case findAttr (unqual a) e of
         Just x -> x
-        _      -> "0.0"
+        _      -> "0.000001"
+    
+    --get image
+    readPNG :: FilePath -> IO (Either String TileImg)
+    readPNG fpath = readImageExact PNG fpath
 
-    --get tiles and neoighbours data
-    getTileData :: Element -> TileData
-    getTileData xml =
+    --make tile from input data
+    makeTile :: (String, SymType, String, Rot, TileImg) -> Tile
+    makeTile (n,s,w,r,i) = Tile n s (readRational w) r i
+    
+    --make rotated tiles based on symmetry type
+    makeRotations :: (String, String, String, TileImg) -> [Tile]
+    makeRotations (n, "X", w , i) = [makeTile (n, TileGen.X, w, N, i)]
+    makeRotations (n, "T", w , i) = [makeTile (n, TileGen.T, w, r, i) | r <- [N,W,S,E]]
+    makeRotations (n, "I", w , i) = [makeTile (n, TileGen.T, w, r, i) | r <- [N,W]]
+    makeRotations (n, "L", w , i) = [makeTile (n, TileGen.L, w, r, i) | r <- [N,W,S,E]]
+    makeRotations (n, "Z", w , i) = [makeTile (n, TileGen.T, w, r, i) | r <- [N,W]]
+
+    --make valid pairs of neighbors based on input data
+    makePair :: (String, String) -> ValidPair
+    makePair (l, r) = 
+        let (ln, lr) = makePair' $ splitOn " " l
+            (rn, rr) = makePair' $ splitOn " " r
+        in
+            ValidPair ln lr rn rr
+
+    makePair' [id]      = (id, N)
+    makePair' [id, "1"] = (id, W)
+    makePair' [id, "2"] = (id, S)
+    makePair' [id, "3"] = (id, E)
+
+    --input tile data from an XML file in the supplied directory with the name 'data.xml'
+    getTileData :: FilePath -> IO ([Tile], [ValidPair])
+    getTileData fpath = do
+        xml    <- parseXMLDoc <$> readFile (fpath ++ "data.xml")
         let 
-            --get tiles
-            xTiles   = elChildren $ findEl "tiles" $ findEl "set" $ xml
+        --get tiles
+            xTiles   = elChildren $ findEl "tiles" $ findEl "set" $ fromJust xml 
             tNames   = L.map (justAttr "name") xTiles
             tSymms   = L.map (justAttr "symmetry") xTiles
             tWeights = L.map (justAttr "weight") xTiles
-            tiles    = L.map mkTile $ zip3 tNames tSymms tWeights
-            --get neighbors
-            xNeighbors = elChildren $ findEl "neighbors" $ findEl "set" $ xml
+        --get neighbors
+            xNeighbors = elChildren $ findEl "neighbors" $ findEl "set" $ fromJust xml
             lNeighbor  = L.map (justAttr "left") xNeighbors
             rNeighbor  = L.map (justAttr "right") xNeighbors
-            neighbors  = L.map (mkNeighbors tNames) $ zip lNeighbor rNeighbor
-        in (TileData tiles neighbors)
+        --get images
+        Right images <- sequence <$> mapM (\n -> readPNG $ fpath ++ n ++ ".png") tNames
+        let
+        --generate tile data
+            rotations  = concatMap makeRotations $ zip4 tNames tSymms tWeights images
+            validPairs = L.map makePair $ zip lNeighbor rNeighbor
+        return (rotations, validPairs)
 
-    readPNG :: String -> IO (Either String (TileImg))
-    readPNG fpath = readImageExact PNG fpath
-
-    --make tile from truple
-    mkTile :: (String, String, String) -> Tile
-    mkTile (name, sym, weight) = Tile name sym (readRational weight)
-
-    --make a valid neighbor pair from the name of two tiles
-    mkNeighbors :: [String] -> (String, String) -> Neighbor
-    mkNeighbors ts (l, r) = 
-        Neighbor (mkConfig ts (splitOn " " l)) (mkConfig ts (splitOn " " r))
-
-    --make a TileConfiguration from the name of the tile and an integer representing its rotation
-    mkConfig :: [String] -> [String] -> TileConfiguration
-    mkConfig ts [id]      = TileConfiguration (mkConfig' id ts) N
-    mkConfig ts [id, "1"] = TileConfiguration (mkConfig' id ts) W
-    mkConfig ts [id, "2"] = TileConfiguration (mkConfig' id ts) S
-    mkConfig ts [id, "3"] = TileConfiguration (mkConfig' id ts) E
-
-    mkConfig' id ts = toInteger $ fromJust $ elemIndex id ts
-
---Functions for printing
--------------------------------------------------------------------------------------
+--Functions for creating the output grid image
+---------------------------------------------------------------------------------------------------
     
-    defaultTile :: TileImg
-    defaultTile = makeImage (tileSize,tileSize) (defaultTilePixel) :: TileImg
-    defaultTilePixel (x,y) = PixelRGB 255 0 127
-    
-    --extract the image IDs for each panel in the grid, with -1 defaults
-    getImageIDGrid :: OutGrid -> [[Integer]]
-    getImageIDGrid grid = [getImageIDLine grid y | y <- [0..gridY]]
+    makeGridImage :: [Tile] -> CollapsedWave -> TileImg
+    makeGridImage ts w = foldl topToBottom 
+        (makeGridRow ts w 0)
+        [makeGridRow ts w y | y <- [1..gridY]]
 
-    getImageIDLine :: OutGrid -> Integer -> [Integer]
-    getImageIDLine grid y = [tid $ getTile grid (x,y) | x <- [0..gridX]]
+    makeGridRow :: [Tile] -> CollapsedWave -> Integer -> TileImg
+    makeGridRow ts w y = foldl leftToRight 
+        (makeGridTile ts w (0,y))
+        [makeGridTile ts w (x,y) | x <- [1..gridX]]
 
-    getTile :: OutGrid -> CoOrd -> TileConfiguration
-    getTile grid coord = Map.findWithDefault (TileConfiguration (-1) N) coord grid
-    
-    printGrid :: [TileImg] -> [[Integer]] -> TileImg
-    printGrid imgs (l:ls) = foldl topToBottom 
-        (printGridLine imgs l)
-        [printGridLine imgs line | line <- ls]
+    makeGridTile :: [Tile] -> CollapsedWave -> CoOrd -> TileImg
+    makeGridTile ts w c = rotateGridTile $ ts !! fromIntegral (w Map.! c)
 
-    printGridLine :: [TileImg] -> [Integer] -> TileImg
-    printGridLine imgs (id:ids) = foldl leftToRight 
-        (printGridTile imgs id)
-        [printGridTile imgs i | i <- ids]
-
-    printGridTile :: [TileImg] -> Integer -> TileImg
-    printGridTile imgs (-1) = defaultTile
-    printGridTile imgs id   = imgs !! (fromIntegral id)
-
-    --main function
-    outputMap :: FilePath -> [CoOrd] -> InGrid -> IO ()
-    outputMap fpath canvas input = do
-        --get tiles and their neighbour data
-        Right xml <- checkXML <$> (parseXMLDoc <$> readFile (fpath ++ "data.xml"))
-        let tData = getTileData xml
-        --get image files for tiles
-        Right images <- sequence <$> mapM (\n -> readPNG $ fpath ++ n ++ ".png") (L.map tileName (tiles tData)) 
-        --get seed
-        putStrLn "Enter a seed number:"
-        seed <- getLine
-        putStrLn "todo"
-
-    checkXML :: Maybe Element -> Either String Element
-    checkXML file = 
-        case file of
-            Just xml -> Right xml
-            _        -> Left "Failed to load data.xml from specified folder."
-
-
-    startGen :: TileData -> InGrid -> CoOrd -> StdGen -> OutGrid
-    startGen (Tiledata ) startGrid startPoint seed = 
-        case generateMap seed grid (validNeighbors tData) [sPoint] (Map.empty :: OutGrid) of
-            Left nseed -> startGen nseed grid tData sPoint
-            Right out  -> out
-
-    generateMap :: [Neighbor] ->  InGrid -> [CoOrd] -> StdGen -> OutGrid -> Either StdGen OutGrid
-    generateMap _ _ _ [] out = Right out
-    generateMap seed input ns unvisited out = undefined
+    rotateGridTile :: Tile -> TileImg
+    rotateGridTile (Tile _ _ _ N i) =           i
+    rotateGridTile (Tile _ _ _ W i) = rotate270 i
+    rotateGridTile (Tile _ _ _ S i) = rotate180 i
+    rotateGridTile (Tile _ _ _ E i) = rotate90  i
