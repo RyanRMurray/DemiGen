@@ -16,6 +16,9 @@ module TileGen where
     import           Text.XML.Light
     import           Util (readRational)
 
+    import           System.Random
+    import           Control.Monad.Random as Rand
+
     data Rot = N | W | S | E deriving (Show)
     data SymType = X | T | I | L | Z deriving (Show)
     type TileImg = Image VS RGB Word8
@@ -139,17 +142,22 @@ module TileGen where
 ---------------------------------------------------------------------------------------------------
 
     startingWave :: [Tile] -> [CoOrd] -> Wave
-    startingWave ts cs = undefined
+    startingWave ts cs = foldl (\c -> Map.insert c $ startingWave' ts) Map.empty cs 
     startingWave' ts   = zip [0.. length ts] [w | (Tile _ _ w _ _) <- ts]
 
     collapseWave :: Wave -> [ValidPair] -> StdGen -> [CoOrd] -> CollapsedWave -> Either StdGen CollapsedWave
     collapseWave _ _ _ [] cw = Right cw
     
-    collapseWave input vPairs seed unvisited output = do
+    collapseWave input vPairs seed unvisited collapsed = do
         let
             nextCoOrd = findNextTile input unvisited
-            (newTile, nextSeed) = Rand.runRand (Rand.fromList $ )
-        --todo: insert new tile, update unvisited, propogate in Wave
+            (newTile, nextSeed) = Rand.runRand (Rand.fromList $ input Map.! nextCoOrd) seed
+            updatedCW = Map.insert nextCoOrd newTile collapsed
+            updateUnv = updateUnvisited input updatedCW unvisited nextCoOrd
+        --todo: insert new tile, update unvisited, propagate in Wave
 
+    findNextTile :: Wave -> [CoOrd] -> CoOrd
+    findNextTile w unvisited = fst $ minimumBy (comparing snd) [(c, length $ w Map.! c)| c <- unvisited]
 
-
+    updateUnvisited :: Wave -> CollapsedWave -> [CoOrd] -> CoOrd -> [CoOrd]
+    updateUnvisited = undefined
