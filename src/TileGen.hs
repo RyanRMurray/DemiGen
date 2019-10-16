@@ -1,9 +1,6 @@
 module TileGen where
     import           Graphics.Image
 
-    import           Control.Monad.Random
-    import           System.Random
-
     import           Data.List as L
     import           Data.List.Split
     import           Data.Ord
@@ -20,7 +17,7 @@ module TileGen where
     import           System.Random
     import           Control.Monad.Random as Rand
 
-    data Rot = N | W | S | E deriving (Show, Eq)      -- Specifies direction of 'top' of tile relative to 'North'
+    type Rot = Int                                    -- Specifies direction of 'top' of tile relative to 'North'
     data SymType = X | T | I | L | Z deriving (Show)  -- Specifies the type of symmetry as seen in WaveFunctionCollapse
     type TileImg = Image VS RGB Word8                 -- Type of image to import and export
 
@@ -37,10 +34,10 @@ module TileGen where
         , lRot  :: Rot
         , rName :: String
         , rRot  :: Rot
-        } deriving (Show)
+        } deriving (Show, Eq)
     
     type CoOrd = (Int, Int)                           -- Coordinates of tiles on an (x,y) plane
-    type Wave = (Map CoOrd [(Tile, Rational)])         -- An uncollapsed wave containing valid tiles for all spaces
+    type Wave = (Map CoOrd [(Tile, Rational)])         -- An partially collapsed wave containing valid tiles for all spaces
     type CollapsedWave = (Map CoOrd Tile)              -- A collapsed wave grid with IDs for all accepted tiles
 
     gridX = 10
@@ -48,7 +45,7 @@ module TileGen where
     tileSize = 3
 
     defaultTile :: TileImg
-    defaultTile = makeImage (tileSize,tileSize) (defaultTilePixel) :: TileImg
+    defaultTile = makeImage (tileSize,tileSize) defaultTilePixel :: TileImg
     defaultTilePixel (x,y) = PixelRGB 255 0 127
 
 --Functions for reading from xml
@@ -67,7 +64,7 @@ module TileGen where
     
     --get image
     readPNG :: FilePath -> IO (Either String TileImg)
-    readPNG fpath = readImageExact PNG fpath
+    readPNG = readImageExact PNG
 
     --make tile from input data
     makeTile :: (String, SymType, String, Rot, TileImg) -> Tile
@@ -75,11 +72,11 @@ module TileGen where
     
     --make rotated tiles based on symmetry type
     makeRotations :: (String, String, String, TileImg) -> [Tile]
-    makeRotations (n, "X", w , i) = [makeTile (n, TileGen.X, w, N, i)]
-    makeRotations (n, "T", w , i) = [makeTile (n, TileGen.T, w, r, i) | r <- [N,W,S,E]]
-    makeRotations (n, "I", w , i) = [makeTile (n, TileGen.T, w, r, i) | r <- [N,W]]
-    makeRotations (n, "L", w , i) = [makeTile (n, TileGen.L, w, r, i) | r <- [N,W,S,E]]
-    makeRotations (n, "Z", w , i) = [makeTile (n, TileGen.T, w, r, i) | r <- [N,W]]
+    makeRotations (n, "X", w , i) = [makeTile (n, TileGen.X, w, 0, i)]
+    makeRotations (n, "T", w , i) = [makeTile (n, TileGen.T, w, r, i) | r <- [0,1,2,3]]
+    makeRotations (n, "I", w , i) = [makeTile (n, TileGen.T, w, r, i) | r <- [0,1]]
+    makeRotations (n, "L", w , i) = [makeTile (n, TileGen.L, w, r, i) | r <- [0,1,2,3]]
+    makeRotations (n, "Z", w , i) = [makeTile (n, TileGen.T, w, r, i) | r <- [0,1]]
 
     --make valid pairs of neighbors based on input data
     makePair :: (String, String) -> ValidPair
@@ -89,10 +86,10 @@ module TileGen where
         in
             ValidPair ln lr rn rr
 
-    makePair' [id]      = (id, N)
-    makePair' [id, "1"] = (id, W)
-    makePair' [id, "2"] = (id, S)
-    makePair' [id, "3"] = (id, E)
+    makePair' [id]      = (id, 0)
+    makePair' [id, "1"] = (id, 1)
+    makePair' [id, "2"] = (id, 2)
+    makePair' [id, "3"] = (id, 3)
 
     --input tile data from an XML file in the supplied directory with the name 'data.xml'
     getTileData :: FilePath -> IO ([Tile], [ValidPair])
@@ -133,10 +130,10 @@ module TileGen where
     makeGridTile ts w c = rotateGridTile $ w Map.! c
 
     rotateGridTile :: Tile -> TileImg
-    rotateGridTile (Tile _ _ _ N i) =           i
-    rotateGridTile (Tile _ _ _ W i) = rotate270 i
-    rotateGridTile (Tile _ _ _ S i) = rotate180 i
-    rotateGridTile (Tile _ _ _ E i) = rotate90  i
+    rotateGridTile (Tile _ _ _ 0 i) =           i
+    rotateGridTile (Tile _ _ _ 1 i) = rotate270 i
+    rotateGridTile (Tile _ _ _ 2 i) = rotate180 i
+    rotateGridTile (Tile _ _ _ 3 i) = rotate90  i
 
 --Core Generator Functions
 ---------------------------------------------------------------------------------------------------
@@ -146,7 +143,6 @@ module TileGen where
     startingWave ts cs = Map.fromList [(c, startingWave' ts)| c <- cs]
     
     startingWave' ts   = [(t, weight t) | t <- ts]
-
 
     --main substructure generation function. will return the next seed upon a contradiction, or else a fully collapsed wave
     collapseWave :: Wave -> [ValidPair] -> StdGen -> [CoOrd] -> CollapsedWave -> Either StdGen CollapsedWave
@@ -158,8 +154,8 @@ module TileGen where
             (newTile, nextSeed) = Rand.runRand (Rand.fromList $ input Map.! nextCoOrd) seed
             updatedCW           = Map.insert nextCoOrd newTile collapsed
             updatedUnv          = updateUnvisited input updatedCW unvisited nextCoOrd
-        --todo: propagate in Wave
-        return collapsed
+        updatedWave <- collapseNeighbors vPairs newTile nextSeed input (getNeighbors input nextCoOrd)
+        collapseWave updatedWave vPairs nextSeed updatedUnv updatedCW
 
     findNextTile :: Wave -> [CoOrd] -> CoOrd
     findNextTile w unvisited = fst $ minimumBy (comparing snd) [(c, length $ w Map.! c)| c <- unvisited]
@@ -170,31 +166,22 @@ module TileGen where
 
     getNeighbors :: Wave -> CoOrd -> [(Rot,CoOrd)]
     getNeighbors w (x,y) = filter (\n -> Map.member (snd n) w)
-        [ (N,(x,y-1))
-        , (W,(x-1,y))
-        , (S,(x,y+1))
-        , (E,(x+1,y))
+        [ (0,(x,y-1))
+        , (1,(x-1,y))
+        , (2,(x,y+1))
+        , (3,(x+1,y))
         ]
 
 
-    propagate :: [ValidPair] -> Wave -> Tile -> [(Rot,CoOrd)] -> StdGen -> Either StdGen Wave
-    propagate pairs w nTile (c:cs) seed = undefined
 
-    --if a tile has no possible occupants, contradiction has been found. Otherwise, return partially collapsed wave
-    collapse :: [ValidPair] -> Wave -> Tile -> CoOrd -> StdGen -> Either StdGen Wave
-    collapse pairs w nTile coord seed = 
-        case findValidTiles pairs (w Map.! coord) nTile of
-            []       -> Left seed
-            possible -> Right $ Map.insert coord possible w
-
-    --find all tiles that are considered valid both before and after the observation of the left neighboring tile
-    findValidTiles :: [ValidPair] -> [(Tile, Rational)] -> Tile -> [(Tile, Rational)]
-    findValidTiles pairs possible tile = 
-        [(t, r) | (t, r) <- possible, elem (name t, rotation t) $ findValidNeighbors pairs tile ]
-     
-    -- valid configurations for right neighbor of specified tile
-    findValidNeighbors :: [ValidPair] -> Tile -> [(String, Rot)]
-    findValidNeighbors pairs (Tile tName _ _ tRot _) = 
-        [(rName v, rRot v)| v <- pairs, (lName v == tName) && (lRot v == tRot)] 
-
-    --TODO: figure out how to rotate left neighbor to complete propogation routine
+    collapseNeighbors :: [ValidPair] -> Tile -> StdGen -> Wave -> [(Rot, CoOrd)] -> Either StdGen Wave
+    collapseNeighbors _ _ _ w [] = Right w
+    
+    
+    testout = do
+        (inputTiles, inputPairs) <- getTileData "tilesamples/"
+        let inputWave = startingWave inputTiles [(0,0),(0,1),(1,0),(1,1)]
+            collapsed = collapseWave inputWave inputPairs (mkStdGen 69) [(0,0)] (Map.empty)
+        case collapsed of
+            Left s -> putStrLn "error"
+            Right img -> writeImageExact PNG [] "test.png" (makeGridImage inputTiles img)
