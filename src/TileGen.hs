@@ -40,7 +40,7 @@ module TileGen where
         } deriving (Show)
     
     type CoOrd = (Int, Int)                           -- Coordinates of tiles on an (x,y) plane
-    type Wave = (Map CoOrd [(Int, Rational)])         -- An uncollapsed wave containing valid tiles for all spaces
+    type Wave = (Map CoOrd [(Tile, Rational)])         -- An uncollapsed wave containing valid tiles for all spaces
     type CollapsedWave = (Map CoOrd Int)              -- A collapsed wave grid with IDs for all accepted tiles
 
     gridX = 10
@@ -182,7 +182,7 @@ module TileGen where
     collapse tData pairs w nTile neighbor seed = undefined
 
     findValidTiles :: [Tile] -> [ValidPair] -> [(Int, Rational)] -> Tile -> [(Int, Rational)]
-    findValidPairs tData pairs possible tile = 
+    findValidPairs tData pairs possible tile = undefined
      
     findValidNeighbors :: [ValidPair] -> Tile -> [(String, Rot)]
     findValidNeighbors pairs (Tile tName _ _ tRot _) = 
