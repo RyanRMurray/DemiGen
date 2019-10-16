@@ -41,7 +41,7 @@ module TileGen where
     
     type CoOrd = (Int, Int)                           -- Coordinates of tiles on an (x,y) plane
     type Wave = (Map CoOrd [(Tile, Rational)])         -- An uncollapsed wave containing valid tiles for all spaces
-    type CollapsedWave = (Map CoOrd Int)              -- A collapsed wave grid with IDs for all accepted tiles
+    type CollapsedWave = (Map CoOrd Tile)              -- A collapsed wave grid with IDs for all accepted tiles
 
     gridX = 10
     gridY = 10
@@ -130,7 +130,7 @@ module TileGen where
         [makeGridTile ts w (x,y) | x <- [1..gridX]]
 
     makeGridTile :: [Tile] -> CollapsedWave -> CoOrd -> TileImg
-    makeGridTile ts w c = rotateGridTile $ ts !! (w Map.! c)
+    makeGridTile ts w c = rotateGridTile $ w Map.! c
 
     rotateGridTile :: Tile -> TileImg
     rotateGridTile (Tile _ _ _ N i) =           i
@@ -145,8 +145,10 @@ module TileGen where
     startingWave :: [Tile] -> [CoOrd] -> Wave
     startingWave ts cs = Map.fromList [(c, startingWave' ts)| c <- cs]
     
-    startingWave' ts   = zip [0.. length ts] [w | (Tile _ _ w _ _) <- ts]
+    startingWave' ts   = [(t, weight t) | t <- ts]
 
+
+    --main substructure generation function. will return the next seed upon a contradiction, or else a fully collapsed wave
     collapseWave :: Wave -> [ValidPair] -> StdGen -> [CoOrd] -> CollapsedWave -> Either StdGen CollapsedWave
     collapseWave _ _ _ [] cw = Right cw
     
@@ -175,22 +177,24 @@ module TileGen where
         ]
 
 
-    propagate :: [Tile] -> [ValidPair] -> Wave -> Tile -> [(Rot,CoOrd)] -> StdGen -> Either StdGen Wave
-    propagate tData pairs w nTile (c:cs) seed = undefined
+    propagate :: [ValidPair] -> Wave -> Tile -> [(Rot,CoOrd)] -> StdGen -> Either StdGen Wave
+    propagate pairs w nTile (c:cs) seed = undefined
 
-    collapse :: [Tile] -> [ValidPair] -> Wave -> Tile -> (Rot, CoOrd) -> StdGen -> Either StdGen Wave
-    collapse tData pairs w nTile neighbor seed = undefined
+    --if a tile has no possible occupants, contradiction has been found. Otherwise, return partially collapsed wave
+    collapse :: [ValidPair] -> Wave -> Tile -> CoOrd -> StdGen -> Either StdGen Wave
+    collapse pairs w nTile coord seed = 
+        case findValidTiles pairs (w Map.! coord) nTile of
+            []       -> Left seed
+            possible -> Right $ Map.insert coord possible w
 
-    findValidTiles :: [Tile] -> [ValidPair] -> [(Int, Rational)] -> Tile -> [(Int, Rational)]
-    findValidPairs tData pairs possible tile = undefined
+    --find all tiles that are considered valid both before and after the observation of the left neighboring tile
+    findValidTiles :: [ValidPair] -> [(Tile, Rational)] -> Tile -> [(Tile, Rational)]
+    findValidTiles pairs possible tile = 
+        [(t, r) | (t, r) <- possible, elem (name t, rotation t) $ findValidNeighbors pairs tile ]
      
+    -- valid configurations for right neighbor of specified tile
     findValidNeighbors :: [ValidPair] -> Tile -> [(String, Rot)]
     findValidNeighbors pairs (Tile tName _ _ tRot _) = 
-        [(rName v, rRot v)| v <- pairs, (lName v == tName) && (lRot v == tRot)] -- valid configurations for neighbor
+        [(rName v, rRot v)| v <- pairs, (lName v == tName) && (lRot v == tRot)] 
 
-    --take wave, ntile, coordinate, valid pair, Tile data
-    --for all neighbors, perform the following;
-        --rotate ntile as if it were "left" of neighbor
-        --for each tile in neighbor that is still valid
-            --filter based on presence in validpair
-        --filter valid tile IDs 
+    --TODO: figure out how to rotate left neighbor to complete propogation routine
