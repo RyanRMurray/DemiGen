@@ -20,7 +20,7 @@ module TileGen where
     import           System.Random
     import           Control.Monad.Random as Rand
 
-    data Rot = N | W | S | E deriving (Show)          -- Specifies direction of 'top' of tile relative to 'North'
+    data Rot = N | W | S | E deriving (Show, Eq)      -- Specifies direction of 'top' of tile relative to 'North'
     data SymType = X | T | I | L | Z deriving (Show)  -- Specifies the type of symmetry as seen in WaveFunctionCollapse
     type TileImg = Image VS RGB Word8                 -- Type of image to import and export
 
@@ -164,12 +164,33 @@ module TileGen where
 
     updateUnvisited :: Wave -> CollapsedWave -> [CoOrd] -> CoOrd -> [CoOrd]
     updateUnvisited w cw unvisited visited = 
-        filter (\n -> Map.notMember n cw) (unvisited ++ getNeighbors w visited)
+        filter (\n -> Map.notMember n cw) (unvisited ++ L.map snd (getNeighbors w visited))
 
-    getNeighbors :: Wave -> CoOrd -> [CoOrd]
-    getNeighbors w (x,y) = filter (\n -> Map.member n w)
-        [ (x,y-1)
-        , (x-1,y)
-        , (x,y+1)
-        , (x+1,y)
+    getNeighbors :: Wave -> CoOrd -> [(Rot,CoOrd)]
+    getNeighbors w (x,y) = filter (\n -> Map.member (snd n) w)
+        [ (N,(x,y-1))
+        , (W,(x-1,y))
+        , (S,(x,y+1))
+        , (E,(x+1,y))
         ]
+
+
+    propagate :: [Tile] -> [ValidPair] -> Wave -> Tile -> [(Rot,CoOrd)] -> StdGen -> Either StdGen Wave
+    propagate tData pairs w nTile (c:cs) seed = undefined
+
+    collapse :: [Tile] -> [ValidPair] -> Wave -> Tile -> (Rot, CoOrd) -> StdGen -> Either StdGen Wave
+    collapse tData pairs w nTile neighbor seed = undefined
+
+    findValidTiles :: [Tile] -> [ValidPair] -> [(Int, Rational)] -> Tile -> [(Int, Rational)]
+    findValidPairs tData pairs possible tile = 
+     
+    findValidNeighbors :: [ValidPair] -> Tile -> [(String, Rot)]
+    findValidNeighbors pairs (Tile tName _ _ tRot _) = 
+        [(rName v, rRot v)| v <- pairs, (lName v == tName) && (lRot v == tRot)] -- valid configurations for neighbor
+
+    --take wave, ntile, coordinate, valid pair, Tile data
+    --for all neighbors, perform the following;
+        --rotate ntile as if it were "left" of neighbor
+        --for each tile in neighbor that is still valid
+            --filter based on presence in validpair
+        --filter valid tile IDs 
