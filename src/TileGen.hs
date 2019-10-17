@@ -40,8 +40,8 @@ module TileGen where
     type Wave = (Map CoOrd [(Tile, Rational)])         -- An partially collapsed wave containing valid tiles for all spaces
     type CollapsedWave = (Map CoOrd Tile)              -- A collapsed wave grid with IDs for all accepted tiles
 
-    gridX = 10
-    gridY = 10
+    gridX = 2
+    gridY = 1
     tileSize = 3
 
     defaultTile :: TileImg
@@ -154,7 +154,7 @@ module TileGen where
             (newTile, nextSeed) = Rand.runRand (Rand.fromList $ input Map.! nextCoOrd) seed
             updatedCW           = Map.insert nextCoOrd newTile collapsed
             updatedUnv          = updateUnvisited input updatedCW unvisited nextCoOrd
-        updatedWave <- collapseNeighbors vPairs newTile nextSeed input (getNeighbors input nextCoOrd)
+        updatedWave <- collapseNeighbors vPairs nextSeed newTile (getNeighbors input updatedCW nextCoOrd) input
         collapseWave updatedWave vPairs nextSeed updatedUnv updatedCW
 
     findNextTile :: Wave -> [CoOrd] -> CoOrd
@@ -162,26 +162,43 @@ module TileGen where
 
     updateUnvisited :: Wave -> CollapsedWave -> [CoOrd] -> CoOrd -> [CoOrd]
     updateUnvisited w cw unvisited visited = 
-        filter (\n -> Map.notMember n cw) (unvisited ++ L.map snd (getNeighbors w visited))
+        filter (\n -> Map.notMember n cw) (unvisited ++ L.map snd (getNeighbors w cw visited))
 
-    getNeighbors :: Wave -> CoOrd -> [(Rot,CoOrd)]
-    getNeighbors w (x,y) = filter (\n -> Map.member (snd n) w)
-        [ (0,(x,y-1))
-        , (1,(x-1,y))
-        , (2,(x,y+1))
-        , (3,(x+1,y))
-        ]
+    getNeighbors :: Wave -> CollapsedWave -> CoOrd -> [(Rot,CoOrd)]
+    getNeighbors w cw (x,y) = 
+        filter (\n-> Map.notMember (snd n) cw) $
+            filter (\n -> Map.member (snd n) w)
+                [ (0,(x,y-1))
+                , (1,(x-1,y))
+                , (2,(x,y+1))
+                , (3,(x+1,y))
+                ]
 
 
 
-    collapseNeighbors :: [ValidPair] -> Tile -> StdGen -> Wave -> [(Rot, CoOrd)] -> Either StdGen Wave
-    collapseNeighbors _ _ _ w [] = Right w
+    collapseNeighbors :: [ValidPair] -> StdGen -> Tile ->  [(Rot, CoOrd)]  -> Wave -> Either StdGen Wave
+    collapseNeighbors _ _ _ [] w = Right w
+    collapseNeighbors pairs seed newTile (n:ns) w =
+        case collapse pairs newTile n w of
+            [] -> Left seed
+            newPSpace -> collapseNeighbors pairs seed newTile ns (Map.insert (snd n) newPSpace w)
+
+
+    collapse :: [ValidPair] -> Tile -> (Rot, CoOrd) -> Wave -> [(Tile, Rational)]
+    collapse pairs newTile (rot, n) w =
+        filterValidNeighbors pairs rot newTile (w Map.! n)
+
+    filterValidNeighbors :: [ValidPair] -> Rot -> Tile -> [(Tile, Rational)] -> [(Tile, Rational)]
+    filterValidNeighbors pairs rot newTile possible =
+        filter (validAfterRotation pairs rot newTile) possible
     
+
+    validAfterRotation :: [ValidPair] -> Rot -> Tile -> (Tile, Rational) -> Bool
+    validAfterRotation pairs rot (Tile ln _ _ lr _) (Tile rn _ _ rr _ , _) = 
+        let offset = abs 3 - rot
+        in 
+            elem (ValidPair ln (rotateTowards lr offset) rn (rotateTowards rr offset)) pairs
+
+    rotateTowards :: Rot -> Rot -> Rot
+    rotateTowards dir rot = mod (dir + rot) 4
     
-    testout = do
-        (inputTiles, inputPairs) <- getTileData "tilesamples/"
-        let inputWave = startingWave inputTiles [(0,0),(0,1),(1,0),(1,1)]
-            collapsed = collapseWave inputWave inputPairs (mkStdGen 69) [(0,0)] (Map.empty)
-        case collapsed of
-            Left s -> putStrLn "error"
-            Right img -> writeImageExact PNG [] "test.png" (makeGridImage inputTiles img)
