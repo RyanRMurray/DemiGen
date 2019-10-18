@@ -1,14 +1,14 @@
 <set size="3">
 	<tiles>
-		<tile name="bend" symmetry="L" weight="0.5"/>
-		<tile name="corner" symmetry="L" weight="0.5"/>
-		<tile name="corridor" symmetry="I" weight="0.5"/>
-		<tile name="door" symmetry="T" weight="0.5"/>
-		<tile name="empty" symmetry="X"/>
-		<tile name="side" symmetry="T" weight="0.5"/>
-		<tile name="t" symmetry="T" weight="0.5"/>
-		<tile name="turn" symmetry="L" weight="0.25"/>
-		<tile name="wall" symmetry="X"/>
+		<tile name="bend" weight="0.5"/>
+		<tile name="corner" weight="0.5"/>
+		<tile name="corridor" weight="0.5"/>
+		<tile name="door" weight="0.5"/>
+		<tile name="empty" weight="0.5"/>
+		<tile name="side" weight="0.5"/>
+		<tile name="t" weight="0.5"/>
+		<tile name="turn" weight="0.25"/>
+		<tile name="wall" weight="0.5"/>
 	</tiles>
 	<neighbors>
 		<neighbor left="corner 1" right="corner"/>

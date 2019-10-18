@@ -28,6 +28,9 @@ module TileGen where
         , rotation :: Rot
         , image    :: TileImg
         }
+    
+    instance Show Tile where
+        show (Tile n s w r i) = "{" ++ show n ++ ", " ++ show w ++ ", " ++ show r ++ "}"
 
     data ValidPair = ValidPair                        -- Pairs of tiles at certain rotations that are considered valid
         { lName :: String                             -- neighbours
@@ -60,7 +63,7 @@ module TileGen where
     justAttr a e = 
         case findAttr (unqual a) e of
         Just x -> x
-        _      -> "0.000001"
+        _      -> "1"
     
     --get image
     readPNG :: FilePath -> IO (Either String TileImg)
@@ -119,7 +122,7 @@ module TileGen where
     makeGridImage :: CollapsedWave -> Int -> Int -> TileImg
     makeGridImage w x y =  foldl topToBottom 
         (makeGridRow w x 0)
-        [makeGridRow w x row | row <- [0..y]]
+        [makeGridRow w x row | row <- [1..y]]
 
     makeGridRow :: CollapsedWave -> Int -> Int -> TileImg
     makeGridRow w x row = foldl leftToRight 
