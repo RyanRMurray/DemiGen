@@ -44,8 +44,8 @@ module TileGen where
     gridY = 1
     tileSize = 3
 
-    defaultTile :: TileImg
-    defaultTile = makeImage (tileSize,tileSize) defaultTilePixel :: TileImg
+    defaultTile :: Tile
+    defaultTile = Tile "error" TileGen.X 0.0 0 (makeImage (tileSize,tileSize) defaultTilePixel :: TileImg)
     defaultTilePixel (x,y) = PixelRGB 255 0 127
 
 --Functions for reading from xml
@@ -72,19 +72,19 @@ module TileGen where
     
     --make rotated tiles based on symmetry type
     makeRotations :: (String, String, String, TileImg) -> [Tile]
-    makeRotations (n, "X", w , i) = [makeTile (n, TileGen.X, w, 0, i)]
+    makeRotations (n, "X", w , i) = [makeTile (n, TileGen.X, w, r, i) | r <- [0,1,2,3]]
     makeRotations (n, "T", w , i) = [makeTile (n, TileGen.T, w, r, i) | r <- [0,1,2,3]]
-    makeRotations (n, "I", w , i) = [makeTile (n, TileGen.T, w, r, i) | r <- [0,1]]
+    makeRotations (n, "I", w , i) = [makeTile (n, TileGen.T, w, r, i) | r <- [0,1,2,3]]
     makeRotations (n, "L", w , i) = [makeTile (n, TileGen.L, w, r, i) | r <- [0,1,2,3]]
-    makeRotations (n, "Z", w , i) = [makeTile (n, TileGen.T, w, r, i) | r <- [0,1]]
+    makeRotations (n, "Z", w , i) = [makeTile (n, TileGen.T, w, r, i) | r <- [0,1,2,3]]
 
     --make valid pairs of neighbors based on input data
-    makePair :: (String, String) -> ValidPair
+    makePair :: (String, String) -> [ValidPair]
     makePair (l, r) = 
         let (ln, lr) = makePair' $ splitOn " " l
             (rn, rr) = makePair' $ splitOn " " r
         in
-            ValidPair ln lr rn rr
+            [ValidPair ln lr rn rr, ValidPair rn (rotateTowards rr 2) ln (rotateTowards lr 2)]
 
     makePair' [id]      = (id, 0)
     makePair' [id, "1"] = (id, 1)
@@ -110,24 +110,24 @@ module TileGen where
         let
         --generate tile data
             rotations  = concatMap makeRotations $ zip4 tNames tSymms tWeights images
-            validPairs = L.map makePair $ zip lNeighbor rNeighbor
+            validPairs = concat $ L.map makePair $ zip lNeighbor rNeighbor
         return (rotations, validPairs)
 
 --Functions for creating the output grid image
 ---------------------------------------------------------------------------------------------------
     
-    makeGridImage :: [Tile] -> CollapsedWave -> TileImg
-    makeGridImage ts w = foldl topToBottom 
-        (makeGridRow ts w 0)
-        [makeGridRow ts w y | y <- [1..gridY]]
+    makeGridImage :: CollapsedWave -> Int -> Int -> TileImg
+    makeGridImage w x y =  foldl topToBottom 
+        (makeGridRow w x 0)
+        [makeGridRow w x row | row <- [0..y]]
 
-    makeGridRow :: [Tile] -> CollapsedWave -> Int -> TileImg
-    makeGridRow ts w y = foldl leftToRight 
-        (makeGridTile ts w (0,y))
-        [makeGridTile ts w (x,y) | x <- [1..gridX]]
+    makeGridRow :: CollapsedWave -> Int -> Int -> TileImg
+    makeGridRow w x row = foldl leftToRight 
+        (makeGridTile w (0,row))
+        [makeGridTile w (col,row) | col <- [1..x]]
 
-    makeGridTile :: [Tile] -> CollapsedWave -> CoOrd -> TileImg
-    makeGridTile ts w c = rotateGridTile $ w Map.! c
+    makeGridTile :: CollapsedWave -> CoOrd -> TileImg
+    makeGridTile w c = rotateGridTile $ Map.findWithDefault defaultTile c w
 
     rotateGridTile :: Tile -> TileImg
     rotateGridTile (Tile _ _ _ 0 i) =           i
@@ -154,27 +154,24 @@ module TileGen where
             (newTile, nextSeed) = Rand.runRand (Rand.fromList $ input Map.! nextCoOrd) seed
             updatedCW           = Map.insert nextCoOrd newTile collapsed
             updatedUnv          = updateUnvisited input updatedCW unvisited nextCoOrd
-        updatedWave <- collapseNeighbors vPairs nextSeed newTile (getNeighbors input updatedCW nextCoOrd) input
+        updatedWave <- collapseNeighbors vPairs nextSeed newTile (getNeighbors input nextCoOrd) input
         collapseWave updatedWave vPairs nextSeed updatedUnv updatedCW
 
     findNextTile :: Wave -> [CoOrd] -> CoOrd
     findNextTile w unvisited = fst $ minimumBy (comparing snd) [(c, length $ w Map.! c)| c <- unvisited]
 
     updateUnvisited :: Wave -> CollapsedWave -> [CoOrd] -> CoOrd -> [CoOrd]
-    updateUnvisited w cw unvisited visited = 
-        filter (\n -> Map.notMember n cw) (unvisited ++ L.map snd (getNeighbors w cw visited))
+    updateUnvisited w cw unvisited visited = delete visited $
+        filter (\n -> Map.notMember n cw) (unvisited ++ L.map snd (getNeighbors w visited))
 
-    getNeighbors :: Wave -> CollapsedWave -> CoOrd -> [(Rot,CoOrd)]
-    getNeighbors w cw (x,y) = 
-        filter (\n-> Map.notMember (snd n) cw) $
+    getNeighbors :: Wave -> CoOrd -> [(Rot,CoOrd)]
+    getNeighbors w (x,y) = 
             filter (\n -> Map.member (snd n) w)
                 [ (0,(x,y-1))
                 , (1,(x-1,y))
                 , (2,(x,y+1))
                 , (3,(x+1,y))
                 ]
-
-
 
     collapseNeighbors :: [ValidPair] -> StdGen -> Tile ->  [(Rot, CoOrd)]  -> Wave -> Either StdGen Wave
     collapseNeighbors _ _ _ [] w = Right w
@@ -189,10 +186,9 @@ module TileGen where
         filterValidNeighbors pairs rot newTile (w Map.! n)
 
     filterValidNeighbors :: [ValidPair] -> Rot -> Tile -> [(Tile, Rational)] -> [(Tile, Rational)]
-    filterValidNeighbors pairs rot newTile possible =
-        filter (validAfterRotation pairs rot newTile) possible
+    filterValidNeighbors pairs rot newTile =
+        filter (validAfterRotation pairs rot newTile)
     
-
     validAfterRotation :: [ValidPair] -> Rot -> Tile -> (Tile, Rational) -> Bool
     validAfterRotation pairs rot (Tile ln _ _ lr _) (Tile rn _ _ rr _ , _) = 
         let offset = abs 3 - rot
@@ -202,3 +198,40 @@ module TileGen where
     rotateTowards :: Rot -> Rot -> Rot
     rotateTowards dir rot = mod (dir + rot) 4
     
+--Misc
+---------------------------------------------------------------------------------------------------
+    
+    generateGridCoOrds :: Int -> Int -> [CoOrd]
+    generateGridCoOrds width height =
+        concat [generateGridCoOrds' width y | y <- [0..height]]
+
+    generateGridCoOrds' width y = [(x,y) | x <- [0..width]]
+
+
+    generateFromInputs :: IO ()
+    generateFromInputs = do
+        putStrLn "Enter the path to the data directory:"
+        fpath <- getLine
+        (tiles, pairs) <- getTileData fpath
+        putStrLn "Enter width and then height of output grid"
+        x <- readLn :: IO Int 
+        y <- readLn :: IO Int
+        let sWave = startingWave tiles $ generateGridCoOrds x y
+        print $ Map.keys sWave
+        putStrLn "Enter starting coordinates, x then y"
+        sx <- readLn :: IO Int
+        sy <- readLn :: IO Int
+        putStrLn "Enter random seed number"
+        seed <- readLn :: IO Int
+        let cw = generateUntilValid sWave pairs (mkStdGen seed) [(sx,sy)]
+        putStrLn "created grid with panels:"
+        print $ Map.keys cw 
+        writeImageExact PNG [] "out.png" (makeGridImage cw 10 10)
+
+    generateUntilValid :: Wave -> [ValidPair] -> StdGen -> [CoOrd] ->  CollapsedWave
+    generateUntilValid w pairs seed start =
+        case collapseWave w pairs seed start Map.empty of
+            Left s -> generateUntilValid w pairs s start
+            Right cw -> cw
+
+
