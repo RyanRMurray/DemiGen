@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: bab12c5c699cf431a0b3fbff147c692d4fbf38a3ea9cf8d1c6cd6928877243ac
+-- hash: 7dd3c0efeb07ac41f717aaf970b569ad37616431bf4e9e02ea3eee86737c4842
 
 name:           DemiGen
 version:        0.1.0.0
@@ -34,7 +34,9 @@ library
       src
   build-depends:
       JuicyPixels
+    , JuicyPixels-extra
     , MonadRandom
+    , array
     , base >=4.7 && <5
     , containers
     , ghc
@@ -54,7 +56,9 @@ executable DemiGen-exe
   build-depends:
       DemiGen
     , JuicyPixels
+    , JuicyPixels-extra
     , MonadRandom
+    , array
     , base >=4.7 && <5
     , containers
     , ghc
@@ -75,7 +79,9 @@ test-suite DemiGen-test
   build-depends:
       DemiGen
     , JuicyPixels
+    , JuicyPixels-extra
     , MonadRandom
+    , array
     , base >=4.7 && <5
     , containers
     , ghc

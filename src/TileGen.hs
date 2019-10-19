@@ -1,9 +1,10 @@
 module TileGen where
-    import           Graphics.Image
+    import           Codec.Picture
+    import           Codec.Picture.Extra
 
     import           Data.List as L
     import           Data.List.Split
-    import           Data.Ord
+    import           Data.Array
     import           Data.Ix (range)
 
     import qualified Data.Map as Map
@@ -14,33 +15,46 @@ module TileGen where
     import           System.Random
     import           Control.Monad.Random as Rand
 
-    type TileImg = Image VS RGB Word8                 -- Type of image to import and export
-    type Pix = Pixel RGB Word8 
-
+    type TileImg = Image PixelRGB8              -- Type of image to import and export
+    type Pix = PixelRGB8 
+    type TileFreqs = Map TileImg Rational
 
     data Pair = Pair
         { lTile :: TileImg
         , rTile :: TileImg
         }
 
-    defaultTilePixel = PixelRGB 255 0 127
+    defaultTilePixel = PixelRGB8 255 0 127
 
-    getInputData :: TileImg -> (Map Pix Rational, [TileImg], [Pair])
-    getInputData pattern = 
-        let
-            freqs = getPixelFreq pattern (dims pattern)
-        in
-            (Map.empty, [], [])
-    
-    getPixelFreq :: TileImg -> (Int, Int) -> Map Pix Rational -> Map Pix Rational
-    getPixelFreq pattern xy freqs = foldl 
-        (\pos -> Map.insertWith (+) (index pattern pos) (1::Rational) freqs) $
-        freqs $
-        getGrid xy 
-    
-    incrementPixelFreq :: Map Pix Rational -> Pix -> Map Pix Rational
-    incrementPixelFreq m p = Map.insertWith (+) p (1::Rational) m
+--Functions for parsing an input image
+--------------------------------------------------------------------------------------------------------
+   
+    getTileFreq :: Image Pix -> Int -> [(TileImg, Rational)]
+    getTileFreq pattern n = foldl
+        (\fs t -> incrementTileFreq t fs) [] $
+        getTiles pattern n
 
-    getGrid :: (Int, Int) -> [(Int, Int)]
-    getGrid (x,y) = concat [getGrid' x row | row <- [0..y]]
-    getGrid' x row = [(col,row)| col <- [0..x]]
+    getGrid :: Int -> Int -> [(Int, Int)]
+    getGrid x y = concat [getGrid' x row| row <- [0..y]]
+    getGrid' x row = [(col,row) | col <- [0..x]]
+
+    incrementTileFreq :: Image Pix -> [(TileImg, Rational)] -> [(TileImg, Rational)]
+    incrementTileFreq t [] = [(t,1.0)]
+    incrementTileFreq t (f:fs)
+        | t == fst f = [(t, snd f + 1.0)] ++ fs
+        | otherwise  = f : incrementTileFreq t fs
+
+    getTiles :: Image Pix -> Int -> [TileImg]
+    getTiles pattern n = 
+        [crop x y n n (repeatPattern pattern) | 
+        (x,y) <- (getGrid (imageWidth pattern - 1) (imageHeight pattern - 1))]
+
+    repeatPattern :: Image Pix -> Image Pix
+    repeatPattern p = below [beside [p, p], beside [p, p]]
+
+    testout = do
+        Right input <- readPng "tall-grid-input.png"
+        let conv = convertRGB8 input
+            tiles = beside $ map fst $ getTileFreq conv 3
+        writePng "testout.png" tiles
+
