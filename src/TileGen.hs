@@ -16,7 +16,7 @@ module TileGen where
     type Pix = PixelRGB8 
     type TileImg = Image Pix              -- Type of image to import and export
     type Tiles = Map Int TileImg
-    type TileFreqs = [(Int, Rational)]
+    type TileFreqs = Map Int Rational
     type CoOrd = (Int, Int)
     type Wave = Map CoOrd TileFreqs
     type Collapsed = Map CoOrd Int
@@ -35,6 +35,14 @@ module TileGen where
 --Functions for parsing an input image
 --------------------------------------------------------------------------------------------------------
 
+    getTileData :: TileImg -> Int -> ([TileImg], TileFreqs)
+    getTileData pattern n =
+        let input       = getTiles pattern n
+            uniqueTiles = getUniqueTiles input
+            tFreq       = getTileFrequencies input uniqueTiles
+        in
+            (uniqueTiles, tFreq)
+
     getAdjacencyRules :: [TileImg] -> [ValidPair]
     getAdjacencyRules ts = filter 
         (\v -> compareWithOffset (ts !! tileA v) (ts !! tileB v) (dir v)) 
@@ -49,25 +57,25 @@ module TileGen where
     getOffset :: TileImg -> CoOrd -> TileImg
     getOffset t (x,y) = crop (0+x) (0+y) (imageWidth t + x) (imageHeight t + x) t
     
-    getTileData :: TileImg -> Int -> (TileFreqs, [TileImg])
-    getTileData pattern n = 
-        let ts = getTileFreqs pattern n
-        in  ([],[])
+    --take in the input, return the frequency of unique tiles
+    getTileFrequencies :: [TileImg] -> [TileImg] -> TileFreqs
+    getTileFrequencies pattern ts = foldl
+        (\m t -> Map.insertWith (+) (fromJust $ elemIndex t ts) 1.0 m) Map.empty
+        pattern
 
-    getTileFreqs :: TileImg -> Int -> [(TileImg, Rational)]
-    getTileFreqs pattern n = foldl
-        (\fs t -> incrementTileFreq t fs) [] $
-        getTiles pattern n
+    --look through input and select all the unique tiles
+    getUniqueTiles :: [TileImg] -> [TileImg]
+    getUniqueTiles pattern = foldl
+        (\l t -> getUniqueTiles' l t) [] $
+        pattern
+    
+    getUniqueTiles' l t
+        | elem t l  = l
+        | otherwise = l ++ [t]
 
     getGrid :: Int -> Int -> [(Int, Int)]
     getGrid x y = concat [getGrid' x row| row <- [0..y]]
     getGrid' x row = [(col,row) | col <- [0..x]]
-
-    incrementTileFreq :: TileImg -> [(TileImg, Rational)] -> [(TileImg, Rational)]
-    incrementTileFreq t [] = [(t,1.0)]
-    incrementTileFreq t (f:fs)
-        | t == fst f = [(t, snd f + 1.0)] ++ fs
-        | otherwise  = f : incrementTileFreq t fs
 
     getTiles :: TileImg -> Int -> [TileImg]
     getTiles pattern n = 
@@ -76,13 +84,6 @@ module TileGen where
 
     repeatPattern :: TileImg -> TileImg
     repeatPattern p = below [beside [p, p], beside [p, p]]
-
-    testout = do
-        Right input <- readPng "tall-grid-input.png"
-        let conv = convertRGB8 input
-            tiles = beside $ map fst $ getTileFreq conv 3
-        writePng "testout.png" tiles
-
 
 --Functions for collapsing a wave
 --------------------------------------------------------------------------------------------------------
@@ -94,8 +95,9 @@ module TileGen where
 
     selectNextCoOrd :: Wave -> CoOrd
     selectNextCoOrd w = fst $ minimumBy (comparing snd)
-        [(c, sum (L.map snd fs)) | (c, fs) <- Map.toList w]
+        [(c, sum (Map.elems fs)) | (c, fs) <- Map.toList w]
         
     indexPix :: TileImg -> Pix
     indexPix t = pixelAt t 0 0
 
+    --TODO: write function that selects next tile, collapse wave upon observation
