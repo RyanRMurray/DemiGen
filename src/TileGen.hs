@@ -38,11 +38,12 @@ module TileGen where
     getTileData :: TileImg -> Int -> ([TileImg], TileFreqs)
     getTileData pattern n =
         let input       = getTiles pattern n
-            uniqueTiles = getUniqueTiles input
+            uniqueTiles = getUniqueTiles input []
             tFreq       = getTileFrequencies input uniqueTiles
         in
             (uniqueTiles, tFreq)
 
+    --take a set of (unique) tiles and 
     getAdjacencyRules :: [TileImg] -> [ValidPair]
     getAdjacencyRules ts = filter 
         (\v -> compareWithOffset (ts !! tileA v) (ts !! tileB v) (dir v)) 
@@ -64,9 +65,9 @@ module TileGen where
         pattern
 
     --look through input and select all the unique tiles
-    getUniqueTiles :: [TileImg] -> [TileImg]
-    getUniqueTiles pattern = foldl
-        (\l t -> getUniqueTiles' l t) [] $
+    getUniqueTiles :: [TileImg] -> [TileImg] -> [TileImg]
+    getUniqueTiles pattern ts = foldl
+        (\l t -> getUniqueTiles' l t) ts $
         pattern
     
     getUniqueTiles' l t
