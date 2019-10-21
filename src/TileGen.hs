@@ -5,9 +5,10 @@ module TileGen where
     import           Data.List as L
     import           Data.Ord
 
-    import qualified Data.Map as Map
+    import qualified Data.Map as M
     import           Data.Map (Map)
-    import           Data.Tree
+    import qualified Data.Heap as H
+    import           Data.Heap (Heap)
 
     import           Debug.Trace
     import           Data.Maybe
@@ -23,6 +24,7 @@ module TileGen where
     type Wave = Map CoOrd TileFreqs
     type Collapsed = Map CoOrd Int
     type Neighbor = (CoOrd,CoOrd)
+    type EntropyHeap = Heap (H.Entry Rational CoOrd)
 
     data ValidPair = ValidPair
         { tileA :: Int
@@ -38,7 +40,7 @@ module TileGen where
 
     dirs = [(0,-1),(-1,0),(0,1),(1,0)]
 
-    emptyWave = Map.empty
+    emptyWave = M.empty
 
 --Functions for parsing an input image
 --------------------------------------------------------------------------------------------------------
@@ -53,7 +55,7 @@ module TileGen where
 
     --take a set of (unique) tiles and 
     getAdjacencyRules :: [TileImg] -> [ValidPair]
-    getAdjacencyRules ts = filter 
+    getAdjacencyRules ts = L.filter 
         (\v -> compareWithOffset (ts !! tileA v) (ts !! tileB v) (dir v)) 
         [ValidPair a b d | a <- [0.. length ts - 1], b <- [0.. length ts - 1], d <- dirs]
 
@@ -73,8 +75,8 @@ module TileGen where
     
     --take in the input, return the frequency of unique tiles
     getTileFrequencies :: [TileImg] -> [TileImg] -> TileFreqs
-    getTileFrequencies pattern ts = Map.toList $ foldl
-        (\m t -> Map.insertWith (+) (fromJust $ elemIndex t ts) 1.0 m) Map.empty
+    getTileFrequencies pattern ts = M.toList $ foldl
+        (\m t -> M.insertWith (+) (fromJust $ elemIndex t ts) 1.0 m) M.empty
         pattern
 
     --look through input and select all the unique tiles
@@ -105,29 +107,32 @@ module TileGen where
 
     generateStartingWave :: CoOrd -> TileFreqs -> Wave
     generateStartingWave (x,y) freqs = foldl
-        (\m pos -> Map.insert pos freqs m) Map.empty $
+        (\m pos -> M.insert pos freqs m) M.empty $
         getGrid x y
 
-    selectNextCoOrd :: Wave -> CoOrd
-    selectNextCoOrd w = fst $ minimumBy (comparing snd)
-        [(c, sum (L.map snd fs)) | (c, fs) <- Map.toList w]
+    selectNextCoOrd :: Wave -> EntropyHeap -> CoOrd
+    selectNextCoOrd w h =
+        let nH = H.filter (\(H.Entry k a) -> M.member a w) h
+        in
+            H.payload $ H.minimum nH
         
     indexPix :: TileImg -> Pix
     indexPix t = pixelAt t 0 0
 
     observePixel :: Wave -> StdGen -> CoOrd -> (Int, StdGen)
-    observePixel w seed coord = Rand.runRand (Rand.fromList $ w Map.! coord) seed
+    observePixel w seed coord = Rand.runRand (Rand.fromList $ w M.! coord) seed
 
-    simplePropagation :: StdGen -> [ValidPair] -> Int -> [Neighbor] -> Wave ->  Either StdGen Wave  
-    simplePropagation _ _ _ [] w = Right w
-    simplePropagation s pairs newTile ((d,n):ns) w =
-        case collapsePixel pairs [newTile] d (w Map.! n) of
+    simplePropagation :: StdGen -> [ValidPair] -> Int -> [Neighbor] -> Wave -> EntropyHeap ->  Either StdGen (Wave,EntropyHeap)  
+    simplePropagation _ _ _ [] w h = Right (w,h)
+    simplePropagation s pairs newTile ((d,n):ns) w h =
+        case collapsePixel pairs [newTile] d (w M.! n) of
             [] -> Left s
-            nPoss -> simplePropagation s pairs newTile ns (Map.insert n nPoss w)
+            nPoss -> simplePropagation s pairs newTile ns (M.insert n nPoss w) 
+                     (H.insert (H.Entry (sum (L.map snd nPoss)) n) h)
 
     getNeighbors :: Wave -> CoOrd -> [Neighbor]
     getNeighbors w (x,y) = 
-        filter (\(d,n) -> elem n (Map.keys w)) [((dx,dy),(x+dx,y+dy)) | (dx,dy) <- dirs]
+        L.filter (\(d,n) -> elem n (M.keys w)) [((dx,dy),(x+dx,y+dy)) | (dx,dy) <- dirs]
 
     collapsePixel :: [ValidPair] -> [Int] -> CoOrd -> [(Int, Rational)] -> [(Int, Rational)]
     collapsePixel pairs enablers dir possible = foldl
@@ -136,33 +141,33 @@ module TileGen where
         enablers
     
     collapsePixel' pairs enabler dir possible =
-        filter (\(p,r) -> elem (ValidPair enabler p dir) pairs) possible
+        L.filter (\(p,r) -> elem (ValidPair enabler p dir) pairs) possible
 
-    --collapseWave :: [ValidPair] -> Wave -> Collapsed -> StdGen -> Either StdGen Collapsed
-    collapseWave pairs w cw seed  
-        | Map.keys w == [] = Right cw
+    collapseWave :: [ValidPair] -> Wave -> Collapsed -> EntropyHeap -> StdGen -> Either StdGen Collapsed
+    collapseWave pairs w cw h seed  
+        | M.keys w == [] = Right cw
         | otherwise = do
-            let nCoOrd         = selectNextCoOrd w
+            let nCoOrd         = selectNextCoOrd w h
                 (nTile, nSeed) = observePixel w seed nCoOrd
-                nCw            = Map.insert nCoOrd nTile cw
-            nW <- simplePropagation nSeed pairs nTile (getNeighbors w nCoOrd) (Map.delete nCoOrd w)
-            collapseWave pairs nW nCw nSeed
+                nCw            = M.insert nCoOrd nTile cw
+            (nW, nH) <- simplePropagation nSeed pairs nTile (getNeighbors w nCoOrd) (M.delete nCoOrd w) h
+            collapseWave pairs nW nCw nH nSeed
 
 --Functions for outputting generated images
 --------------------------------------------------------------------------------------------------------
 
     generatePixelList :: Collapsed -> [TileImg] -> Map CoOrd Pix
     generatePixelList cw ts =
-        Map.fromList [(c, indexPix $ ts !! i) | (c,i) <- Map.toList cw]
+        M.fromList [(c, indexPix $ ts !! i) | (c,i) <- M.toList cw]
 
 
     generateOutputImage :: Map CoOrd Pix -> Int -> Int -> TileImg
     generateOutputImage ps x y =
-        generateImage (\x y -> ps Map.! (x,y)) x y
+        generateImage (\x y -> ps M.! (x,y)) x y
 
-    generateUntilValid pairs w m s =
-        case collapseWave pairs w m s of
-            Left ns -> trace ("contradiction") $ generateUntilValid pairs w m ns
+    generateUntilValid pairs w m h s =
+        case collapseWave pairs w m h s of
+            Left ns -> trace ("contradiction") $ generateUntilValid pairs w m h ns
             Right cw -> cw
 
     testout = do
@@ -170,11 +175,12 @@ module TileGen where
         let conv = convertRGB8 input
             (tiles, freqs) = getTileData conv 3
             pairs = getAdjacencyRules tiles
-            w = generateStartingWave (200,200) freqs
-            cw = generateUntilValid pairs w Map.empty (mkStdGen 2)
+            w = generateStartingWave (100,100) freqs
+            h = H.singleton (H.Entry 0.0 (0,0))
+            cw = generateUntilValid pairs w M.empty h (mkStdGen 69)
         let pxs = generatePixelList cw tiles
-            out = generateOutputImage pxs 200 200
+            out = generateOutputImage pxs 100 100
         writePng "testout.png" out
 
 
-    --TODO: write function that selects next tile, collapse wave upon observation
+    --TODO: Optimise by minimising number of nodes looked at when selecting the next tile to collapse

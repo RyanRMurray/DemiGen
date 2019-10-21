@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 7dd3c0efeb07ac41f717aaf970b569ad37616431bf4e9e02ea3eee86737c4842
+-- hash: 0f6434e49d6ed2751a9a5678a4469d0a7217eee2cb29cbd91658f2d4689fc383
 
 name:           DemiGen
 version:        0.1.0.0
@@ -36,14 +36,13 @@ library
       JuicyPixels
     , JuicyPixels-extra
     , MonadRandom
-    , array
     , base >=4.7 && <5
     , containers
     , ghc
+    , heaps
     , hip
     , random
     , split
-    , xml
   default-language: Haskell2010
 
 executable DemiGen-exe
@@ -58,14 +57,13 @@ executable DemiGen-exe
     , JuicyPixels
     , JuicyPixels-extra
     , MonadRandom
-    , array
     , base >=4.7 && <5
     , containers
     , ghc
+    , heaps
     , hip
     , random
     , split
-    , xml
   default-language: Haskell2010
 
 test-suite DemiGen-test
@@ -81,12 +79,11 @@ test-suite DemiGen-test
     , JuicyPixels
     , JuicyPixels-extra
     , MonadRandom
-    , array
     , base >=4.7 && <5
     , containers
     , ghc
+    , heaps
     , hip
     , random
     , split
-    , xml
   default-language: Haskell2010
