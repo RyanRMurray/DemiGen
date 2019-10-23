@@ -9,6 +9,8 @@ module TileGen where
     import           Data.Map (Map)
     import qualified Data.Heap as H
     import           Data.Heap (MinHeap)
+    import qualified Data.Set as S
+    import           Data.Set (Set)
 
     import           Debug.Trace
     import           Data.Maybe
@@ -32,9 +34,13 @@ module TileGen where
         , dir   :: CoOrd
         }
     instance Eq ValidPair where
-        v1 == v2 = and [(tileA v1 == tileA v2), (tileB v1 == tileB v2), (dir v1 == dir v2)]
+        (ValidPair a1 b1 d1) == (ValidPair a2 b2 d2) = and [(a1 == a2), (b1 == b2), (d1 == d2)]
+    instance Ord ValidPair where
+        compare (ValidPair a1 b1 d1) (ValidPair a2 b2 d2) = (compare a1 a2) <> (compare b1 b2) <> (compare d1 d2)
     instance Show ValidPair where 
         show (ValidPair a b d) = "{" ++ show a ++ ", " ++ show b ++ ", " ++ show d ++ "}" 
+
+    type ValidPairs = Set ValidPair
 
     defaultTilePixel = PixelRGB8 255 0 127
 
@@ -54,8 +60,8 @@ module TileGen where
             (uniqueTiles, tFreq)
 
     --take a set of (unique) tiles and 
-    getAdjacencyRules :: [TileImg] -> [ValidPair]
-    getAdjacencyRules ts = L.filter 
+    getAdjacencyRules :: [TileImg] -> ValidPairs
+    getAdjacencyRules ts = S.fromList $ L.filter 
         (\v -> compareWithOffset (ts !! tileA v) (ts !! tileB v) (dir v)) 
         [ValidPair a b d | a <- [0.. length ts - 1], b <- [0.. length ts - 1], d <- dirs]
 
@@ -124,7 +130,7 @@ module TileGen where
     observePixel :: Wave -> StdGen -> CoOrd -> (Int, StdGen)
     observePixel w seed coord = Rand.runRand (Rand.fromList $ w M.! coord) seed
 
-    simplePropagation :: StdGen -> [ValidPair] -> Int -> [Neighbor] -> Wave -> EntropyHeap ->  Either StdGen (Wave,EntropyHeap)  
+    simplePropagation :: StdGen -> ValidPairs -> Int -> [Neighbor] -> Wave -> EntropyHeap ->  Either StdGen (Wave,EntropyHeap)  
     simplePropagation _ _ _ [] w h = Right (w,h)
     simplePropagation s pairs newTile ((d,n):ns) w h =
         case collapsePixel pairs [newTile] d (w M.! n) of
@@ -136,16 +142,16 @@ module TileGen where
     getNeighbors w (x,y) = 
         L.filter (\(d,n) -> M.member n w) [((dx,dy),(x+dx,y+dy)) | (dx,dy) <- dirs]
 
-    collapsePixel :: [ValidPair] -> [Int] -> CoOrd -> [(Int, Rational)] -> [(Int, Rational)]
+    collapsePixel :: ValidPairs -> [Int] -> CoOrd -> [(Int, Rational)] -> [(Int, Rational)]
     collapsePixel pairs enablers dir possible = foldl
         (\ps e -> collapsePixel' pairs e dir ps) 
         possible
         enablers
     
     collapsePixel' pairs enabler dir possible =
-        L.filter (\(p,r) -> elem (ValidPair enabler p dir) pairs) possible
+        L.filter (\(p,r) -> S.member (ValidPair enabler p dir) pairs) possible
 
-    collapseWave :: [ValidPair] -> Wave -> Collapsed -> EntropyHeap -> StdGen -> Either StdGen Collapsed
+    collapseWave :: ValidPairs -> Wave -> Collapsed -> EntropyHeap -> StdGen -> Either StdGen Collapsed
     collapseWave pairs w cw h seed  
         | M.keys w == [] = Right cw
         | otherwise = do
