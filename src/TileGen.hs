@@ -134,7 +134,7 @@ module TileGen where
 
     getNeighbors :: Wave -> CoOrd -> [Neighbor]
     getNeighbors w (x,y) = 
-        L.filter (\(d,n) -> elem n (M.keys w)) [((dx,dy),(x+dx,y+dy)) | (dx,dy) <- dirs]
+        L.filter (\(d,n) -> M.member n w) [((dx,dy),(x+dx,y+dy)) | (dx,dy) <- dirs]
 
     collapsePixel :: [ValidPair] -> [Int] -> CoOrd -> [(Int, Rational)] -> [(Int, Rational)]
     collapsePixel pairs enablers dir possible = foldl
@@ -177,11 +177,11 @@ module TileGen where
         let conv = convertRGB8 input
             (tiles, freqs) = getTileData conv 3
             pairs = getAdjacencyRules tiles
-            w = generateStartingWave (100,100) freqs
+            w = generateStartingWave (200,200) freqs
             h = H.singleton (0.0, (0,0)) :: EntropyHeap
             cw = generateUntilValid pairs w M.empty h (mkStdGen 69)
         let pxs = generatePixelList cw tiles
-            out = generateOutputImage pxs 100 100
+            out = generateOutputImage pxs 200 200
         writePng "testout.png" out
 
 
