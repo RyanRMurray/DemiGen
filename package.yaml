@@ -27,7 +27,7 @@ dependencies:
 - JuicyPixels-extra
 - ghc
 - split
-- heaps
+- heap
 - hip
 - base >= 4.7 && < 5
 

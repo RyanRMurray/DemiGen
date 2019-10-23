@@ -8,7 +8,7 @@ module TileGen where
     import qualified Data.Map as M
     import           Data.Map (Map)
     import qualified Data.Heap as H
-    import           Data.Heap (Heap)
+    import           Data.Heap (MinHeap)
 
     import           Debug.Trace
     import           Data.Maybe
@@ -24,7 +24,7 @@ module TileGen where
     type Wave = Map CoOrd TileFreqs
     type Collapsed = Map CoOrd Int
     type Neighbor = (CoOrd,CoOrd)
-    type EntropyHeap = Heap (H.Entry Rational CoOrd)
+    type EntropyHeap = MinHeap (Rational, CoOrd)
 
     data ValidPair = ValidPair
         { tileA :: Int
@@ -110,12 +110,14 @@ module TileGen where
         (\m pos -> M.insert pos freqs m) M.empty $
         getGrid x y
 
-    selectNextCoOrd :: Wave -> EntropyHeap -> CoOrd
-    selectNextCoOrd w h =
-        let nH = H.filter (\(H.Entry k a) -> M.member a w) h
-        in
-            H.payload $ H.minimum nH
-        
+    selectNextCoOrd :: Wave -> EntropyHeap -> (CoOrd, EntropyHeap)
+    selectNextCoOrd w h 
+            | M.member c w = (c,nH)
+            | otherwise    = selectNextCoOrd w nH
+           where c  = snd $ head $ H.take 1 h
+                 nH = H.drop 1 h  
+
+
     indexPix :: TileImg -> Pix
     indexPix t = pixelAt t 0 0
 
@@ -128,7 +130,7 @@ module TileGen where
         case collapsePixel pairs [newTile] d (w M.! n) of
             [] -> Left s
             nPoss -> simplePropagation s pairs newTile ns (M.insert n nPoss w) 
-                     (H.insert (H.Entry (sum (L.map snd nPoss)) n) h)
+                     (H.insert (sum (L.map snd nPoss), n) h)
 
     getNeighbors :: Wave -> CoOrd -> [Neighbor]
     getNeighbors w (x,y) = 
@@ -147,11 +149,11 @@ module TileGen where
     collapseWave pairs w cw h seed  
         | M.keys w == [] = Right cw
         | otherwise = do
-            let nCoOrd         = selectNextCoOrd w h
+            let (nCoOrd, nH)   = selectNextCoOrd w h
                 (nTile, nSeed) = observePixel w seed nCoOrd
                 nCw            = M.insert nCoOrd nTile cw
-            (nW, nH) <- simplePropagation nSeed pairs nTile (getNeighbors w nCoOrd) (M.delete nCoOrd w) h
-            collapseWave pairs nW nCw nH nSeed
+            (nW, nH2) <- simplePropagation nSeed pairs nTile (getNeighbors w nCoOrd) (M.delete nCoOrd w) nH
+            collapseWave pairs nW nCw nH2 nSeed
 
 --Functions for outputting generated images
 --------------------------------------------------------------------------------------------------------
@@ -176,7 +178,7 @@ module TileGen where
             (tiles, freqs) = getTileData conv 3
             pairs = getAdjacencyRules tiles
             w = generateStartingWave (100,100) freqs
-            h = H.singleton (H.Entry 0.0 (0,0))
+            h = H.singleton (0.0, (0,0)) :: EntropyHeap
             cw = generateUntilValid pairs w M.empty h (mkStdGen 69)
         let pxs = generatePixelList cw tiles
             out = generateOutputImage pxs 100 100
