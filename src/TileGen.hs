@@ -81,9 +81,13 @@ module TileGen where
     
     --take in the input, return the frequency of unique tiles
     getTileFrequencies :: [TileImg] -> [TileImg] -> TileFreqs
-    getTileFrequencies pattern ts = M.toList $ foldl
-        (\m t -> M.insertWith (+) (fromJust $ elemIndex t ts) 1.0 m) M.empty
-        pattern
+    getTileFrequencies pattern ts = 
+        let intFreqs = getTileFrequencies' pattern ts
+            total    = sum $ L.map snd intFreqs
+        in
+            L.map (\(i,w)-> (i, w/total)) intFreqs
+
+    getTileFrequencies' pattern ts = M.toList $ foldl (\m t -> M.insertWith (+) (fromJust $ elemIndex t ts) 1.0 m) M.empty pattern
 
     --look through input and select all the unique tiles
     getUniqueTiles :: [TileImg] -> [TileImg] -> [TileImg]
@@ -136,7 +140,10 @@ module TileGen where
         case collapsePixel pairs [newTile] d (w M.! n) of
             [] -> Left s
             nPoss -> simplePropagation s pairs newTile ns (M.insert n nPoss w) 
-                     (H.insert (sum (L.map snd nPoss), n) h)
+                     (H.insert (getEntropy $ nPoss, n) h)
+
+    getEntropy :: [(Int, Rational)] -> Rational
+    getEntropy weights = toRational $ - sum [realToFrac w * logBase 2 (realToFrac w :: Float)| (_, w) <- weights]
 
     getNeighbors :: Wave -> CoOrd -> [Neighbor]
     getNeighbors w (x,y) = 
