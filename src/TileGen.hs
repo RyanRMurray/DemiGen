@@ -139,9 +139,8 @@ module TileGen where
     collapseNeighbors _ _ _ [] w h next = Right (w,h,next)
     collapseNeighbors s rules enablers ((d,n):ns) w h next 
         | length collapsedPixel == 0 = Left s
-        | length collapsedPixel /= length precollapsed = collapseNeighbors s rules enablers ns newWave newHeap $
-                                                         n : next
-        | otherwise                                    = collapseNeighbors s rules enablers ns newWave newHeap next
+        | length collapsedPixel == length precollapsed = collapseNeighbors s rules enablers ns newWave newHeap next
+        | otherwise                                    = collapseNeighbors s rules enablers ns newWave newHeap $ next ++ [n]
         where precollapsed   = w M.! n
               collapsedPixel = collapsePixel rules enablers d precollapsed
               newWave        = M.insert n collapsedPixel w
@@ -166,14 +165,15 @@ module TileGen where
         L.filter (\(d,n) -> M.member n w) [((dx,dy),(x+dx,y+dy)) | (dx,dy) <- dirs]
 
     collapsePixel :: EnabledTiles -> [Int] -> CoOrd -> [(Int, Rational)] -> [(Int, Rational)]
-    collapsePixel rules enablers dir possible = foldl
-        (\ps e -> collapsePixel' rules e dir ps) 
-        possible
-        enablers
+    collapsePixel rules (e:es) dir possible = (collapsePixel' rules e dir possible) ++ collapsePixel rules es dir possible
+    collapsePixel _ [] _ _ = [] 
 
     collapsePixel' rules enabler dir possible = 
-        L.filter (\(p,r) -> S.member p (rules M.! (enabler, dir))) possible
+        L.filter (\(p,r) -> S.member p (M.findWithDefault S.empty (enabler, dir) rules )) possible
 
+
+        ---TODO : THIS FUCKS UP IF IT DETECTS NO VALID RULES. IT SHOULD REDUCE TO [] IF THATS THE CASE
+        
     collapseWave :: EnabledTiles -> Wave -> Collapsed -> EntropyHeap -> StdGen -> Either StdGen Collapsed
     collapseWave pairs w cw h seed  
         | M.keys w == [] = Right cw
