@@ -74,10 +74,10 @@ module TileGen where
     --take in the input, return the frequency of unique tiles
     getTileFrequencies :: [TileImg] -> [TileImg] -> TileFreqs
     getTileFrequencies pattern ts = 
-        let intFreqs = getTileFrequencies' pattern ts
-            total    = sum $ L.map snd intFreqs
+        let counts = getTileFrequencies' pattern ts
+            total    = sum $ L.map snd counts
         in
-            L.map (\(i,w)-> (i, w/total)) intFreqs
+            L.map (\(i,w)-> (i, w/total)) counts
 
     getTileFrequencies' pattern ts = M.toList $ foldl (\m t -> M.insertWith (+) (fromJust $ elemIndex t ts) 1.0 m) M.empty pattern
 
@@ -126,17 +126,36 @@ module TileGen where
     observePixel w seed coord = Rand.runRand (Rand.fromList $ w M.! coord) seed
 
 
+    propagate :: StdGen -> EnabledTiles -> [CoOrd] -> Wave -> EntropyHeap -> Either StdGen (Wave, EntropyHeap)
+    propagate _ _ [] w h = Right (w,h)
+    propagate s rules (t:ts) w h =
+        case collapseNeighbors s rules (L.map fst $ w M.! t) (getNeighbors w t) w h [] of
+            Left err -> Left err
+            Right (nW, nH, next) -> propagate s rules (ts ++ next) w h
+
+
     
+    collapseNeighbors :: StdGen -> EnabledTiles -> [Int] -> [Neighbor] -> Wave -> EntropyHeap -> [CoOrd] -> Either StdGen (Wave, EntropyHeap, [CoOrd])
+    collapseNeighbors _ _ _ [] w h next = Right (w,h,next)
+    collapseNeighbors s rules enablers ((d,n):ns) w h next 
+        | length collapsedPixel == 0 = Left s
+        | length collapsedPixel /= length precollapsed = collapseNeighbors s rules enablers ns newWave newHeap $
+                                                         n : next
+        | otherwise                                    = collapseNeighbors s rules enablers ns newWave newHeap next
+        where precollapsed   = w M.! n
+              collapsedPixel = collapsePixel rules enablers d precollapsed
+              newWave        = M.insert n collapsedPixel w
+              newHeap        = H.insert (getEntropy collapsedPixel, n) h
+
 
     simplePropagation :: StdGen -> EnabledTiles -> Int -> [Neighbor] -> Wave -> EntropyHeap ->  Either StdGen (Wave,EntropyHeap)  
     simplePropagation _ _ _ [] w h = Right (w,h)
     simplePropagation s rules newTile ((d,n):ns) w h =
         case collapsePixel rules [newTile] d (w M.! n) of
             [] -> Left s
-            nPoss -> simplePropagation s rules newTile ns (M.insert n nPoss w) 
-                     (H.insert (getEntropy $ nPoss, n) h)
-
-
+            nPoss -> simplePropagation s rules newTile ns 
+                     (M.insert n nPoss w)                  -- updated wave with tiles still considered valid
+                     (H.insert (getEntropy $ nPoss, n) h)  -- updated heap with new entropy of collapsed tile
 
 
     getEntropy :: [(Int, Rational)] -> Rational
@@ -151,9 +170,6 @@ module TileGen where
         (\ps e -> collapsePixel' rules e dir ps) 
         possible
         enablers
-    
-  --  collapsePixel' pairs enabler dir possible =
-  --      L.filter (\(p,r) -> S.member (ValidPair enabler p dir) pairs) possible
 
     collapsePixel' rules enabler dir possible = 
         L.filter (\(p,r) -> S.member p (rules M.! (enabler, dir))) possible
@@ -165,8 +181,8 @@ module TileGen where
             let (nCoOrd, nH)   = selectNextCoOrd w h
                 (nTile, nSeed) = observePixel w seed nCoOrd
                 nCw            = M.insert nCoOrd nTile cw
-            (nW, nH2) <- simplePropagation nSeed pairs nTile (getNeighbors w nCoOrd) (M.delete nCoOrd w) nH
-            collapseWave pairs nW nCw nH2 nSeed
+            (nW, nH2) <- propagate nSeed pairs [nCoOrd] (M.insert nCoOrd [(nTile,0.0)] w) nH
+            collapseWave pairs (M.delete nCoOrd nW) nCw nH2 nSeed
 
 --Functions for outputting generated images
 --------------------------------------------------------------------------------------------------------
@@ -190,11 +206,11 @@ module TileGen where
         let conv = convertRGB8 input
             (tiles, freqs) = getTileData conv 3
             rules = processAdjacencyRules tiles
-            w = generateStartingWave (400,400) freqs
+            w = generateStartingWave (10,10) freqs
             h = H.singleton (0.0, (0,0)) :: EntropyHeap
             cw = generateUntilValid rules w M.empty h (mkStdGen 629)
         let pxs = generatePixelList cw tiles
-            out = generateOutputImage pxs 400 400
+            out = generateOutputImage pxs 10 10
         writePng "testout.png" out
 
 
