@@ -129,17 +129,17 @@ module TileGen where
     propagate :: StdGen -> EnabledTiles -> [CoOrd] -> Wave -> EntropyHeap -> Either StdGen (Wave, EntropyHeap)
     propagate _ _ [] w h = Right (w,h)
     propagate s rules (t:ts) w h =
-        case trace (show (t:ts)) $collapseNeighbors s rules (L.map fst $ w M.! t) (getNeighbors w t) w h [] of
+        case collapseNeighbors s rules (L.map fst $ w M.! t) (getNeighbors w t) w h [] of
             Left err -> Left err
-            Right (nW, nH, next) -> propagate s rules (ts ++ next) w h
+            Right (nW, nH, next) -> propagate s rules (next ++ ts) nW nH
 
 
     
     collapseNeighbors :: StdGen -> EnabledTiles -> [Int] -> [Neighbor] -> Wave -> EntropyHeap -> [CoOrd] -> Either StdGen (Wave, EntropyHeap, [CoOrd])
     collapseNeighbors _ _ _ [] w h next = Right (w,h,next)
     collapseNeighbors s rules enablers ((d,n):ns) w h next 
-        | length collapsedPixel == 0 = Left s
         | length collapsedPixel == length precollapsed = collapseNeighbors s rules enablers ns newWave newHeap next
+        | length collapsedPixel == 0 = Left s
         | otherwise                                    = collapseNeighbors s rules enablers ns newWave newHeap $ next ++ [n]
         where precollapsed   = w M.! n
               collapsedPixel = collapsePixel rules enablers d precollapsed
@@ -181,7 +181,7 @@ module TileGen where
             let (nCoOrd, nH)   = selectNextCoOrd w h
                 (nTile, nSeed) = observePixel w seed nCoOrd
                 nCw            = M.insert nCoOrd nTile cw
-            (nW, nH2) <- propagate nSeed pairs [nCoOrd] (M.insert nCoOrd [(nTile,0.0)] w) nH
+            (nW, nH2) <- propagate nSeed pairs [nCoOrd] (M.insert nCoOrd [(nTile,1.0)] w) nH
             collapseWave pairs (M.delete nCoOrd nW) nCw nH2 nSeed
 
 --Functions for outputting generated images
@@ -202,7 +202,7 @@ module TileGen where
             Right cw -> cw
 
     testout = do
-        Right input <- readPng "tall-grid-input.png"
+        Right input <- readPng "bricks.png"
         let conv = convertRGB8 input
             (tiles, freqs) = getTileData conv 3
             rules = processAdjacencyRules tiles
