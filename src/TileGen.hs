@@ -27,20 +27,7 @@ module TileGen where
     type Collapsed = Map CoOrd Int
     type Neighbor = (CoOrd,CoOrd)
     type EntropyHeap = MinHeap (Rational, CoOrd)
-
-    data ValidPair = ValidPair
-        { tileA :: Int
-        , tileB :: Int
-        , dir   :: CoOrd
-        }
-    instance Eq ValidPair where
-        (ValidPair a1 b1 d1) == (ValidPair a2 b2 d2) = and [(a1 == a2), (b1 == b2), (d1 == d2)]
-    instance Ord ValidPair where
-        compare (ValidPair a1 b1 d1) (ValidPair a2 b2 d2) = (compare a1 a2) <> (compare b1 b2) <> (compare d1 d2)
-    instance Show ValidPair where 
-        show (ValidPair a b d) = "{" ++ show a ++ ", " ++ show b ++ ", " ++ show d ++ "}" 
-
-    type ValidPairs = Set ValidPair
+    type EnabledTiles = Map (Int, CoOrd) (Set Int)
 
     defaultTilePixel = PixelRGB8 255 0 127
 
@@ -60,10 +47,17 @@ module TileGen where
             (uniqueTiles, tFreq)
 
     --take a set of (unique) tiles and 
-    getAdjacencyRules :: [TileImg] -> ValidPairs
-    getAdjacencyRules ts = S.fromList $ L.filter 
-        (\v -> compareWithOffset (ts !! tileA v) (ts !! tileB v) (dir v)) 
-        [ValidPair a b d | a <- [0.. length ts - 1], b <- [0.. length ts - 1], d <- dirs]
+    getAdjacencyRules :: [TileImg] -> [(Int, Int, CoOrd)]
+    getAdjacencyRules ts = L.filter 
+        (\(a,b,d) -> compareWithOffset (ts !! a) (ts !! b) d) 
+        [(a, b, d) | a <- [0.. length ts - 1], b <- [0.. length ts - 1], d <- dirs]
+
+    processAdjacencyRules :: [TileImg] -> EnabledTiles
+    processAdjacencyRules ts = foldl 
+            (\m (a,b,d)-> M.insertWith (S.union) (a,d) (S.singleton b) m)
+            M.empty $
+            getAdjacencyRules ts
+
 
     compareWithOffset :: TileImg -> TileImg -> CoOrd -> Bool
     compareWithOffset a b (x,y) =
@@ -76,8 +70,6 @@ module TileGen where
     getOffset t (-1,0) = crop 0 0 2 3 t
     getOffset t (0,1)  = crop 0 1 3 2 t
     getOffset t (1,0)  = crop 1 0 2 3 t
-
-    --todo: fix this shit. causing index out of bounds error
     
     --take in the input, return the frequency of unique tiles
     getTileFrequencies :: [TileImg] -> [TileImg] -> TileFreqs
@@ -125,8 +117,7 @@ module TileGen where
             | M.member c w = (c,nH)
             | otherwise    = selectNextCoOrd w nH
            where c  = snd $ head $ H.take 1 h
-                 nH = H.drop 1 h  
-
+                 nH = H.drop 1 h
 
     indexPix :: TileImg -> Pix
     indexPix t = pixelAt t 0 0
@@ -134,13 +125,19 @@ module TileGen where
     observePixel :: Wave -> StdGen -> CoOrd -> (Int, StdGen)
     observePixel w seed coord = Rand.runRand (Rand.fromList $ w M.! coord) seed
 
-    simplePropagation :: StdGen -> ValidPairs -> Int -> [Neighbor] -> Wave -> EntropyHeap ->  Either StdGen (Wave,EntropyHeap)  
+
+    
+
+    simplePropagation :: StdGen -> EnabledTiles -> Int -> [Neighbor] -> Wave -> EntropyHeap ->  Either StdGen (Wave,EntropyHeap)  
     simplePropagation _ _ _ [] w h = Right (w,h)
-    simplePropagation s pairs newTile ((d,n):ns) w h =
-        case collapsePixel pairs [newTile] d (w M.! n) of
+    simplePropagation s rules newTile ((d,n):ns) w h =
+        case collapsePixel rules [newTile] d (w M.! n) of
             [] -> Left s
-            nPoss -> simplePropagation s pairs newTile ns (M.insert n nPoss w) 
+            nPoss -> simplePropagation s rules newTile ns (M.insert n nPoss w) 
                      (H.insert (getEntropy $ nPoss, n) h)
+
+
+
 
     getEntropy :: [(Int, Rational)] -> Rational
     getEntropy weights = toRational $ - sum [realToFrac w * logBase 2 (realToFrac w :: Float)| (_, w) <- weights]
@@ -149,16 +146,19 @@ module TileGen where
     getNeighbors w (x,y) = 
         L.filter (\(d,n) -> M.member n w) [((dx,dy),(x+dx,y+dy)) | (dx,dy) <- dirs]
 
-    collapsePixel :: ValidPairs -> [Int] -> CoOrd -> [(Int, Rational)] -> [(Int, Rational)]
-    collapsePixel pairs enablers dir possible = foldl
-        (\ps e -> collapsePixel' pairs e dir ps) 
+    collapsePixel :: EnabledTiles -> [Int] -> CoOrd -> [(Int, Rational)] -> [(Int, Rational)]
+    collapsePixel rules enablers dir possible = foldl
+        (\ps e -> collapsePixel' rules e dir ps) 
         possible
         enablers
     
-    collapsePixel' pairs enabler dir possible =
-        L.filter (\(p,r) -> S.member (ValidPair enabler p dir) pairs) possible
+  --  collapsePixel' pairs enabler dir possible =
+  --      L.filter (\(p,r) -> S.member (ValidPair enabler p dir) pairs) possible
 
-    collapseWave :: ValidPairs -> Wave -> Collapsed -> EntropyHeap -> StdGen -> Either StdGen Collapsed
+    collapsePixel' rules enabler dir possible = 
+        L.filter (\(p,r) -> S.member p (rules M.! (enabler, dir))) possible
+
+    collapseWave :: EnabledTiles -> Wave -> Collapsed -> EntropyHeap -> StdGen -> Either StdGen Collapsed
     collapseWave pairs w cw h seed  
         | M.keys w == [] = Right cw
         | otherwise = do
@@ -189,12 +189,12 @@ module TileGen where
         Right input <- readPng "tall-grid-input.png"
         let conv = convertRGB8 input
             (tiles, freqs) = getTileData conv 3
-            pairs = getAdjacencyRules tiles
-            w = generateStartingWave (200,200) freqs
+            rules = processAdjacencyRules tiles
+            w = generateStartingWave (400,400) freqs
             h = H.singleton (0.0, (0,0)) :: EntropyHeap
-            cw = generateUntilValid pairs w M.empty h (mkStdGen 69)
+            cw = generateUntilValid rules w M.empty h (mkStdGen 629)
         let pxs = generatePixelList cw tiles
-            out = generateOutputImage pxs 200 200
+            out = generateOutputImage pxs 400 400
         writePng "testout.png" out
 
 
