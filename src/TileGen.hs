@@ -129,7 +129,7 @@ module TileGen where
     propagate :: StdGen -> EnabledTiles -> [CoOrd] -> Wave -> EntropyHeap -> Either StdGen (Wave, EntropyHeap)
     propagate _ _ [] w h = Right (w,h)
     propagate s rules (t:ts) w h =
-        case collapseNeighbors s rules (L.map fst $ w M.! t) (getNeighbors w t) w h [] of
+        case trace (show (t:ts)) $collapseNeighbors s rules (L.map fst $ w M.! t) (getNeighbors w t) w h [] of
             Left err -> Left err
             Right (nW, nH, next) -> propagate s rules (ts ++ next) w h
 
@@ -165,11 +165,11 @@ module TileGen where
         L.filter (\(d,n) -> M.member n w) [((dx,dy),(x+dx,y+dy)) | (dx,dy) <- dirs]
 
     collapsePixel :: EnabledTiles -> [Int] -> CoOrd -> [(Int, Rational)] -> [(Int, Rational)]
-    collapsePixel rules (e:es) dir possible = (collapsePixel' rules e dir possible) ++ collapsePixel rules es dir possible
-    collapsePixel _ [] _ _ = [] 
+    collapsePixel rules enablers dir possible = nub $ concat [collapsePixel' rules e dir possible | e <- enablers]
 
     collapsePixel' rules enabler dir possible = 
         L.filter (\(p,r) -> S.member p (M.findWithDefault S.empty (enabler, dir) rules )) possible
+
 
 
         ---TODO : THIS FUCKS UP IF IT DETECTS NO VALID RULES. IT SHOULD REDUCE TO [] IF THATS THE CASE
