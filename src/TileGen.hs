@@ -46,6 +46,14 @@ module TileGen where
         in
             (uniqueTiles, tFreq)
 
+    getTilesWithRotation :: TileImg -> Int -> ([TileImg], TileFreqs)
+    getTilesWithRotation pattern n =
+        let input = concat [getTiles pattern n, getTiles (rotateLeft90 pattern) n, getTiles (rotate180 pattern) n, getTiles (rotateRight90 pattern) n]
+            uniqueTiles = getUniqueTiles input []
+            tFreq = getTileFrequencies input uniqueTiles
+        in
+            (uniqueTiles, tFreq)
+
     --take a set of (unique) tiles and 
     getAdjacencyRules :: [TileImg] -> [(Int, Int, CoOrd)]
     getAdjacencyRules ts = L.filter 
@@ -99,7 +107,7 @@ module TileGen where
     getTiles :: TileImg -> Int -> [TileImg]
     getTiles pattern n = 
         [crop x y n n (repeatPattern pattern) | 
-        (x,y) <- (getGrid (imageWidth pattern - 1) (imageHeight pattern - 1))]
+        (x,y) <- (getGrid (imageWidth pattern -1) (imageHeight pattern -1))]
 
     repeatPattern :: TileImg -> TileImg
     repeatPattern p = below [beside [p, p], beside [p, p]]
@@ -138,7 +146,7 @@ module TileGen where
     collapseNeighbors :: StdGen -> EnabledTiles -> [Int] -> [Neighbor] -> Wave -> EntropyHeap -> [CoOrd] -> Either StdGen (Wave, EntropyHeap, [CoOrd])
     collapseNeighbors _ _ _ [] w h next = Right (w,h,next)
     collapseNeighbors s rules enablers ((d,n):ns) w h next 
-        | length collapsedPixel == length precollapsed = collapseNeighbors s rules enablers ns newWave newHeap next
+        | length collapsedPixel == length precollapsed = collapseNeighbors s rules enablers ns w h next
         | length collapsedPixel == 0 = Left s
         | otherwise                                    = collapseNeighbors s rules enablers ns newWave newHeap $ next ++ [n]
         where precollapsed   = w M.! n
@@ -175,14 +183,14 @@ module TileGen where
         ---TODO : THIS FUCKS UP IF IT DETECTS NO VALID RULES. IT SHOULD REDUCE TO [] IF THATS THE CASE
         
     collapseWave :: EnabledTiles -> Wave -> Collapsed -> EntropyHeap -> StdGen -> Either StdGen Collapsed
-    collapseWave pairs w cw h seed  
+    collapseWave rules w cw h seed  
         | M.keys w == [] = Right cw
         | otherwise = do
             let (nCoOrd, nH)   = selectNextCoOrd w h
                 (nTile, nSeed) = observePixel w seed nCoOrd
                 nCw            = M.insert nCoOrd nTile cw
-            (nW, nH2) <- propagate nSeed pairs [nCoOrd] (M.insert nCoOrd [(nTile,1.0)] w) nH
-            collapseWave pairs (M.delete nCoOrd nW) nCw nH2 nSeed
+            (nW, nH2) <- propagate nSeed rules [nCoOrd] (M.insert nCoOrd [(nTile,1.0)] w) nH
+            collapseWave rules (M.delete nCoOrd nW) nCw nH2 nSeed
 
 --Functions for outputting generated images
 --------------------------------------------------------------------------------------------------------
@@ -202,15 +210,15 @@ module TileGen where
             Right cw -> cw
 
     testout = do
-        Right input <- readPng "bricks.png"
+        Right input <- readPng "Dungeon.png"
         let conv = convertRGB8 input
-            (tiles, freqs) = getTileData conv 3
+            (tiles, freqs) = getTilesWithRotation conv 3
             rules = processAdjacencyRules tiles
-            w = generateStartingWave (10,10) freqs
-            h = H.singleton (0.0, (0,0)) :: EntropyHeap
-            cw = generateUntilValid rules w M.empty h (mkStdGen 629)
+            w = generateStartingWave (100,100) freqs
+            h = H.singleton (0.0, (10,10)) :: EntropyHeap
+            cw = generateUntilValid rules w M.empty h (mkStdGen 6)
         let pxs = generatePixelList cw tiles
-            out = generateOutputImage pxs 10 10
+            out = generateOutputImage pxs 100 100
         writePng "testout.png" out
 
 
