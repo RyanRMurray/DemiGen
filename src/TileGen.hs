@@ -27,20 +27,7 @@ module TileGen where
     type Collapsed = Map CoOrd Int
     type Neighbor = (CoOrd,CoOrd)
     type EntropyHeap = MinHeap (Rational, CoOrd)
-
-    data ValidPair = ValidPair
-        { tileA :: Int
-        , tileB :: Int
-        , dir   :: CoOrd
-        }
-    instance Eq ValidPair where
-        (ValidPair a1 b1 d1) == (ValidPair a2 b2 d2) = and [(a1 == a2), (b1 == b2), (d1 == d2)]
-    instance Ord ValidPair where
-        compare (ValidPair a1 b1 d1) (ValidPair a2 b2 d2) = (compare a1 a2) <> (compare b1 b2) <> (compare d1 d2)
-    instance Show ValidPair where 
-        show (ValidPair a b d) = "{" ++ show a ++ ", " ++ show b ++ ", " ++ show d ++ "}" 
-
-    type ValidPairs = Set ValidPair
+    type EnabledTiles = Map (Int, CoOrd) (Set Int)
 
     defaultTilePixel = PixelRGB8 255 0 127
 
@@ -59,11 +46,26 @@ module TileGen where
         in
             (uniqueTiles, tFreq)
 
+    getTilesWithRotation :: TileImg -> Int -> ([TileImg], TileFreqs)
+    getTilesWithRotation pattern n =
+        let input = concat [getTiles pattern n, getTiles (rotateLeft90 pattern) n, getTiles (rotate180 pattern) n, getTiles (rotateRight90 pattern) n]
+            uniqueTiles = getUniqueTiles input []
+            tFreq = getTileFrequencies input uniqueTiles
+        in
+            (uniqueTiles, tFreq)
+
     --take a set of (unique) tiles and 
-    getAdjacencyRules :: [TileImg] -> ValidPairs
-    getAdjacencyRules ts = S.fromList $ L.filter 
-        (\v -> compareWithOffset (ts !! tileA v) (ts !! tileB v) (dir v)) 
-        [ValidPair a b d | a <- [0.. length ts - 1], b <- [0.. length ts - 1], d <- dirs]
+    getAdjacencyRules :: [TileImg] -> [(Int, Int, CoOrd)]
+    getAdjacencyRules ts = L.filter 
+        (\(a,b,d) -> compareWithOffset (ts !! a) (ts !! b) d) 
+        [(a, b, d) | a <- [0.. length ts - 1], b <- [0.. length ts - 1], d <- dirs]
+
+    processAdjacencyRules :: [TileImg] -> EnabledTiles
+    processAdjacencyRules ts = foldl 
+            (\m (a,b,d)-> M.insertWith (S.union) (a,d) (S.singleton b) m)
+            M.empty $
+            getAdjacencyRules ts
+
 
     compareWithOffset :: TileImg -> TileImg -> CoOrd -> Bool
     compareWithOffset a b (x,y) =
@@ -76,16 +78,14 @@ module TileGen where
     getOffset t (-1,0) = crop 0 0 2 3 t
     getOffset t (0,1)  = crop 0 1 3 2 t
     getOffset t (1,0)  = crop 1 0 2 3 t
-
-    --todo: fix this shit. causing index out of bounds error
     
     --take in the input, return the frequency of unique tiles
     getTileFrequencies :: [TileImg] -> [TileImg] -> TileFreqs
     getTileFrequencies pattern ts = 
-        let intFreqs = getTileFrequencies' pattern ts
-            total    = sum $ L.map snd intFreqs
+        let counts = getTileFrequencies' pattern ts
+            total    = sum $ L.map snd counts
         in
-            L.map (\(i,w)-> (i, w/total)) intFreqs
+            L.map (\(i,w)-> (i, w/total)) counts
 
     getTileFrequencies' pattern ts = M.toList $ foldl (\m t -> M.insertWith (+) (fromJust $ elemIndex t ts) 1.0 m) M.empty pattern
 
@@ -107,7 +107,7 @@ module TileGen where
     getTiles :: TileImg -> Int -> [TileImg]
     getTiles pattern n = 
         [crop x y n n (repeatPattern pattern) | 
-        (x,y) <- (getGrid (imageWidth pattern - 1) (imageHeight pattern - 1))]
+        (x,y) <- (getGrid (imageWidth pattern -1) (imageHeight pattern -1))]
 
     repeatPattern :: TileImg -> TileImg
     repeatPattern p = below [beside [p, p], beside [p, p]]
@@ -125,8 +125,7 @@ module TileGen where
             | M.member c w = (c,nH)
             | otherwise    = selectNextCoOrd w nH
            where c  = snd $ head $ H.take 1 h
-                 nH = H.drop 1 h  
-
+                 nH = H.drop 1 h
 
     indexPix :: TileImg -> Pix
     indexPix t = pixelAt t 0 0
@@ -134,13 +133,37 @@ module TileGen where
     observePixel :: Wave -> StdGen -> CoOrd -> (Int, StdGen)
     observePixel w seed coord = Rand.runRand (Rand.fromList $ w M.! coord) seed
 
-    simplePropagation :: StdGen -> ValidPairs -> Int -> [Neighbor] -> Wave -> EntropyHeap ->  Either StdGen (Wave,EntropyHeap)  
+
+    propagate :: StdGen -> EnabledTiles -> [CoOrd] -> Wave -> EntropyHeap -> Either StdGen (Wave, EntropyHeap)
+    propagate _ _ [] w h = Right (w,h)
+    propagate s rules (t:ts) w h =
+        case collapseNeighbors s rules (L.map fst $ w M.! t) (getNeighbors w t) w h [] of
+            Left err -> Left err
+            Right (nW, nH, next) -> propagate s rules (next ++ ts) nW nH
+
+
+    
+    collapseNeighbors :: StdGen -> EnabledTiles -> [Int] -> [Neighbor] -> Wave -> EntropyHeap -> [CoOrd] -> Either StdGen (Wave, EntropyHeap, [CoOrd])
+    collapseNeighbors _ _ _ [] w h next = Right (w,h,next)
+    collapseNeighbors s rules enablers ((d,n):ns) w h next 
+        | length collapsedPixel == length precollapsed = collapseNeighbors s rules enablers ns w h next
+        | length collapsedPixel == 0 = Left s
+        | otherwise                                    = collapseNeighbors s rules enablers ns newWave newHeap $ next ++ [n]
+        where precollapsed   = w M.! n
+              collapsedPixel = collapsePixel rules enablers d precollapsed
+              newWave        = M.insert n collapsedPixel w
+              newHeap        = H.insert (getEntropy collapsedPixel, n) h
+
+
+    simplePropagation :: StdGen -> EnabledTiles -> Int -> [Neighbor] -> Wave -> EntropyHeap ->  Either StdGen (Wave,EntropyHeap)  
     simplePropagation _ _ _ [] w h = Right (w,h)
-    simplePropagation s pairs newTile ((d,n):ns) w h =
-        case collapsePixel pairs [newTile] d (w M.! n) of
+    simplePropagation s rules newTile ((d,n):ns) w h =
+        case collapsePixel rules [newTile] d (w M.! n) of
             [] -> Left s
-            nPoss -> simplePropagation s pairs newTile ns (M.insert n nPoss w) 
-                     (H.insert (getEntropy $ nPoss, n) h)
+            nPoss -> simplePropagation s rules newTile ns 
+                     (M.insert n nPoss w)                  -- updated wave with tiles still considered valid
+                     (H.insert (getEntropy $ nPoss, n) h)  -- updated heap with new entropy of collapsed tile
+
 
     getEntropy :: [(Int, Rational)] -> Rational
     getEntropy weights = toRational $ - sum [realToFrac w * logBase 2 (realToFrac w :: Float)| (_, w) <- weights]
@@ -149,24 +172,25 @@ module TileGen where
     getNeighbors w (x,y) = 
         L.filter (\(d,n) -> M.member n w) [((dx,dy),(x+dx,y+dy)) | (dx,dy) <- dirs]
 
-    collapsePixel :: ValidPairs -> [Int] -> CoOrd -> [(Int, Rational)] -> [(Int, Rational)]
-    collapsePixel pairs enablers dir possible = foldl
-        (\ps e -> collapsePixel' pairs e dir ps) 
-        possible
-        enablers
-    
-    collapsePixel' pairs enabler dir possible =
-        L.filter (\(p,r) -> S.member (ValidPair enabler p dir) pairs) possible
+    collapsePixel :: EnabledTiles -> [Int] -> CoOrd -> [(Int, Rational)] -> [(Int, Rational)]
+    collapsePixel rules enablers dir possible = nub $ concat [collapsePixel' rules e dir possible | e <- enablers]
 
-    collapseWave :: ValidPairs -> Wave -> Collapsed -> EntropyHeap -> StdGen -> Either StdGen Collapsed
-    collapseWave pairs w cw h seed  
+    collapsePixel' rules enabler dir possible = 
+        L.filter (\(p,r) -> S.member p (M.findWithDefault S.empty (enabler, dir) rules )) possible
+
+
+
+        ---TODO : THIS FUCKS UP IF IT DETECTS NO VALID RULES. IT SHOULD REDUCE TO [] IF THATS THE CASE
+        
+    collapseWave :: EnabledTiles -> Wave -> Collapsed -> EntropyHeap -> StdGen -> Either StdGen Collapsed
+    collapseWave rules w cw h seed  
         | M.keys w == [] = Right cw
         | otherwise = do
             let (nCoOrd, nH)   = selectNextCoOrd w h
                 (nTile, nSeed) = observePixel w seed nCoOrd
                 nCw            = M.insert nCoOrd nTile cw
-            (nW, nH2) <- simplePropagation nSeed pairs nTile (getNeighbors w nCoOrd) (M.delete nCoOrd w) nH
-            collapseWave pairs nW nCw nH2 nSeed
+            (nW, nH2) <- propagate nSeed rules [nCoOrd] (M.insert nCoOrd [(nTile,1.0)] w) nH
+            collapseWave rules (M.delete nCoOrd nW) nCw nH2 nSeed
 
 --Functions for outputting generated images
 --------------------------------------------------------------------------------------------------------
@@ -186,15 +210,15 @@ module TileGen where
             Right cw -> cw
 
     testout = do
-        Right input <- readPng "tall-grid-input.png"
+        Right input <- readPng "Dungeon.png"
         let conv = convertRGB8 input
-            (tiles, freqs) = getTileData conv 3
-            pairs = getAdjacencyRules tiles
-            w = generateStartingWave (200,200) freqs
-            h = H.singleton (0.0, (0,0)) :: EntropyHeap
-            cw = generateUntilValid pairs w M.empty h (mkStdGen 69)
+            (tiles, freqs) = getTilesWithRotation conv 3
+            rules = processAdjacencyRules tiles
+            w = generateStartingWave (100,100) freqs
+            h = H.singleton (0.0, (10,10)) :: EntropyHeap
+            cw = generateUntilValid rules w M.empty h (mkStdGen 6)
         let pxs = generatePixelList cw tiles
-            out = generateOutputImage pxs 200 200
+            out = generateOutputImage pxs 100 100
         writePng "testout.png" out
 
 
