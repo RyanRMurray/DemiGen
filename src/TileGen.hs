@@ -21,7 +21,7 @@ module TileGen where
     type Pix = PixelRGB8 
     type TileImg = Image Pix              -- Type of image to import and export
     type Tiles = Map Int TileImg
-    type TileFreqs = [(Int, Rational)]
+    type TileFreqs = Set (Int, Rational)
     type CoOrd = (Int, Int)
     type Wave = Map CoOrd TileFreqs
     type Collapsed = Map CoOrd Int
@@ -83,11 +83,11 @@ module TileGen where
     getTileFrequencies :: [TileImg] -> [TileImg] -> TileFreqs
     getTileFrequencies pattern ts = 
         let counts = getTileFrequencies' pattern ts
-            total    = sum $ L.map snd counts
+            total    = sum $ S.map snd counts
         in
-            L.map (\(i,w)-> (i, w/total)) counts
+            S.map (\(i,w)-> (i, w/total)) counts
 
-    getTileFrequencies' pattern ts = M.toList $ foldl (\m t -> M.insertWith (+) (fromJust $ elemIndex t ts) 1.0 m) M.empty pattern
+    getTileFrequencies' pattern ts = S.fromList $ M.toList $ foldl (\m t -> M.insertWith (+) (fromJust $ elemIndex t ts) 1.0 m) M.empty pattern
 
     --look through input and select all the unique tiles
     getUniqueTiles :: [TileImg] -> [TileImg] -> [TileImg]
@@ -131,19 +131,19 @@ module TileGen where
     indexPix t = pixelAt t 0 0
 
     observePixel :: Wave -> StdGen -> CoOrd -> (Int, StdGen)
-    observePixel w seed coord = Rand.runRand (Rand.fromList $ w M.! coord) seed
+    observePixel w seed coord = Rand.runRand (Rand.fromList $ S.toList $ w M.! coord) seed
 
 
     propagate :: StdGen -> EnabledTiles -> [CoOrd] -> Wave -> EntropyHeap -> Either StdGen (Wave, EntropyHeap)
     propagate _ _ [] w h = Right (w,h)
     propagate s rules (t:ts) w h =
-        case collapseNeighbors s rules (L.map fst $ w M.! t) (getNeighbors w t) w h [] of
+        case collapseNeighbors s rules (S.map fst $ w M.! t) (getNeighbors w t) w h [] of
             Left err -> Left err
             Right (nW, nH, next) -> propagate s rules (next ++ ts) nW nH
 
 
     
-    collapseNeighbors :: StdGen -> EnabledTiles -> [Int] -> [Neighbor] -> Wave -> EntropyHeap -> [CoOrd] -> Either StdGen (Wave, EntropyHeap, [CoOrd])
+    collapseNeighbors :: StdGen -> EnabledTiles -> Set Int -> [Neighbor] -> Wave -> EntropyHeap -> [CoOrd] -> Either StdGen (Wave, EntropyHeap, [CoOrd])
     collapseNeighbors _ _ _ [] w h next = Right (w,h,next)
     collapseNeighbors s rules enablers ((d,n):ns) w h next 
         | length collapsedPixel == length precollapsed = collapseNeighbors s rules enablers ns w h next
@@ -154,34 +154,22 @@ module TileGen where
               newWave        = M.insert n collapsedPixel w
               newHeap        = H.insert (getEntropy collapsedPixel, n) h
 
-
-    simplePropagation :: StdGen -> EnabledTiles -> Int -> [Neighbor] -> Wave -> EntropyHeap ->  Either StdGen (Wave,EntropyHeap)  
-    simplePropagation _ _ _ [] w h = Right (w,h)
-    simplePropagation s rules newTile ((d,n):ns) w h =
-        case collapsePixel rules [newTile] d (w M.! n) of
-            [] -> Left s
-            nPoss -> simplePropagation s rules newTile ns 
-                     (M.insert n nPoss w)                  -- updated wave with tiles still considered valid
-                     (H.insert (getEntropy $ nPoss, n) h)  -- updated heap with new entropy of collapsed tile
-
-
-    getEntropy :: [(Int, Rational)] -> Rational
-    getEntropy weights = toRational $ - sum [realToFrac w * logBase 2 (realToFrac w :: Float)| (_, w) <- weights]
+    getEntropy :: Set (Int, Rational) -> Rational
+    getEntropy weights = toRational $ - sum [realToFrac w * logBase 2 (realToFrac w :: Float)| (_, w) <- S.toList weights]
 
     getNeighbors :: Wave -> CoOrd -> [Neighbor]
     getNeighbors w (x,y) = 
         L.filter (\(d,n) -> M.member n w) [((dx,dy),(x+dx,y+dy)) | (dx,dy) <- dirs]
 
-    collapsePixel :: EnabledTiles -> [Int] -> CoOrd -> [(Int, Rational)] -> [(Int, Rational)]
-    collapsePixel rules enablers dir possible = nub $ concat [collapsePixel' rules e dir possible | e <- enablers]
+    collapsePixel :: EnabledTiles -> Set Int -> CoOrd -> Set (Int, Rational) -> Set (Int, Rational)
+    collapsePixel rules enablers dir possible = 
+        S.filter (\(i, _)-> S.member i allowed) possible 
+        where
+            allowed = S.unions [collapsePixel' rules e dir | e <- S.toList enablers]
+    
+    collapsePixel' rules enabler dir  =
+        M.findWithDefault S.empty (enabler, dir) rules
 
-    collapsePixel' rules enabler dir possible = 
-        L.filter (\(p,r) -> S.member p (M.findWithDefault S.empty (enabler, dir) rules )) possible
-
-
-
-        ---TODO : THIS FUCKS UP IF IT DETECTS NO VALID RULES. IT SHOULD REDUCE TO [] IF THATS THE CASE
-        
     collapseWave :: EnabledTiles -> Wave -> Collapsed -> EntropyHeap -> StdGen -> Either StdGen Collapsed
     collapseWave rules w cw h seed  
         | M.keys w == [] = Right cw
@@ -189,7 +177,7 @@ module TileGen where
             let (nCoOrd, nH)   = selectNextCoOrd w h
                 (nTile, nSeed) = observePixel w seed nCoOrd
                 nCw            = M.insert nCoOrd nTile cw
-            (nW, nH2) <- propagate nSeed rules [nCoOrd] (M.insert nCoOrd [(nTile,1.0)] w) nH
+            (nW, nH2) <- propagate nSeed rules [nCoOrd] (M.insert nCoOrd (S.singleton (nTile,1.0)) w) nH
             collapseWave rules (M.delete nCoOrd nW) nCw nH2 nSeed
 
 --Functions for outputting generated images
@@ -214,12 +202,9 @@ module TileGen where
         let conv = convertRGB8 input
             (tiles, freqs) = getTilesWithRotation conv 3
             rules = processAdjacencyRules tiles
-            w = generateStartingWave (100,100) freqs
-            h = H.singleton (0.0, (10,10)) :: EntropyHeap
-            cw = generateUntilValid rules w M.empty h (mkStdGen 6)
+            w = generateStartingWave (160,160) freqs
+            h = H.singleton (0.0, (3,3)) :: EntropyHeap
+            cw = generateUntilValid rules w M.empty h (mkStdGen 420)
         let pxs = generatePixelList cw tiles
-            out = generateOutputImage pxs 100 100
+            out = generateOutputImage pxs 160 160
         writePng "testout.png" out
-
-
-    --TODO: Optimise by minimising number of nodes looked at when selecting the next tile to collapse
