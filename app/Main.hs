@@ -1,6 +1,6 @@
 module Main where
 
-import TileGen
+    import DemiGen.TileGen
 
-main :: IO ()
-main = testout
+    main :: IO ()
+    main = testout

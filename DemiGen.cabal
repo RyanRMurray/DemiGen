@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: e07b3d5b969a840ff267a69bb9a767fa9012a62d32898c8095c5ce6806ce65ec
+-- hash: 3ae6a0d0646268d77401878c5ff0f9452b21a1395d4b3416f6acde184e2d9da5
 
 name:           DemiGen
 version:        0.1.0.0
@@ -27,7 +27,8 @@ source-repository head
 
 library
   exposed-modules:
-      TileGen
+      DemiGen.TileGen
+      DemiGen.Types
   other-modules:
       Paths_DemiGen
   hs-source-dirs:
