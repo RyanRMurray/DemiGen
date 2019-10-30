@@ -181,15 +181,24 @@ module DemiGen.TileGen where
             (tiles, collapsed)
 
     --temporary function for testing
-    
-    testout = do	
-        Right input <- readPng "Dungeon.png"	
-        let conv = convertRGB8 input	
-            (tiles, freqs) = getTilesWithRotation conv 3	
-            rules = processAdjacencyRules tiles	
-            w = generateStartingWave (160,160) freqs	
-            h = H.singleton (0.0, (3,3)) :: EntropyHeap	
-            cw = generateUntilValid rules w M.empty h (mkStdGen 420)	
-        let pxs = generatePixelList cw tiles	
-            out = generateOutputImage pxs 160 160	
-        writePng "testout.png" out 
+    testout = do
+        Right x <- readPng "Stream.png"
+        Right y <- readPng "Dungeon.png"
+        let stream = convertRGB8 x
+            dungeon = convertRGB8 y
+            (t1, c1) = generateFromImage stream 3 [noTransform] (getGrid 9 9) (mkStdGen 24644441)
+            (t2, c2) = generateFromImage stream 3 withReflectionsAndRotations (getGrid 99 99) (mkStdGen 4201)
+            (t3, c3) = generateFromImage dungeon 3 withRotations (getGrid 100 100) (mkStdGen 3333)
+            (t4, c4) = generateFromImage dungeon 3 withReflectionsAndRotations (getGrid 200 200) (mkStdGen 41411)
+        print "Generating 10x10 'Stream' grid..."
+        writePng "testout1.png" $ generateOutputImage (generatePixelList c1 t1) 10 10
+        print "Done"
+        print "Generating 100x100 'Stream' grid..."
+        writePng "testout2.png" $ generateOutputImage (generatePixelList c2 t2) 100 100
+        print "Done"
+        print "Generating 100x100 'Dungeon' grid..."
+        writePng "testout3.png" $ generateOutputImage (generatePixelList c3 t3) 100 100
+        print "Done"
+        print "Generating 200x200 'Dungeon' grid..."
+        writePng "testout4.png" $ generateOutputImage (generatePixelList c4 t4) 200 200
+        print "Done"
