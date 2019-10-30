@@ -11,7 +11,7 @@ module DemiGen.TileGen where
     import           Data.Heap (MinHeap)
     import           Data.Set (Set)
     import           Data.Ord
-    
+
     import           System.Random
     import           Control.Monad.Random as Rand
 
@@ -25,18 +25,18 @@ module DemiGen.TileGen where
     --their relative rarity.
     getTileData :: TileImg -> Int -> [Transform] -> ([TileImg], TileFreqs)
     getTileData pattern n [] = getTileData pattern n [noTransform]
-    getTileData pattern n trans = 
+    getTileData pattern n trans =
         let transmutations = [t pattern | t <- trans]
             tiles = concat $ L.map (getTiles n) transmutations
             unique = nub tiles
-            tFreq = getTileFrequencies tiles unique 
+            tFreq = getTileFrequencies tiles unique
         in
             (unique, tFreq)
 
- 
+
     --take in the input, return the frequency of unique tiles
     getTileFrequencies :: [TileImg] -> [TileImg] -> TileFreqs
-    getTileFrequencies pattern ts = 
+    getTileFrequencies pattern ts =
         let counts = getTileFrequencies' pattern ts
             total  = sum $ S.map snd counts
         in
@@ -46,14 +46,14 @@ module DemiGen.TileGen where
 
     --take a set of (unique) tiles and determine which can be overlapped as neighbors
     processAdjacencyRules :: Int -> [TileImg] -> EnabledTiles
-    processAdjacencyRules n ts = foldl 
+    processAdjacencyRules n ts = foldl
             (\m (a,b,d)-> M.insertWith (S.union) (a,d) (S.singleton b) m)
             M.empty $
             getAdjacencyRules n ts
-            
+
     getAdjacencyRules :: Int -> [TileImg] -> [(Int, Int, CoOrd)]
-    getAdjacencyRules n ts = L.filter 
-        (\(a,b,d) -> compareWithOffset n (ts !! a) (ts !! b) d) 
+    getAdjacencyRules n ts = L.filter
+        (\(a,b,d) -> compareWithOffset n (ts !! a) (ts !! b) d)
         [(a, b, d) | a <- [0.. length ts - 1], b <- [0.. length ts - 1], d <- dirs]
 
     compareWithOffset :: Int -> TileImg -> TileImg -> CoOrd -> Bool
@@ -67,10 +67,10 @@ module DemiGen.TileGen where
     getOffset n t (-1,0) = crop 0 0 2 n t
     getOffset n t (0,1)  = crop 0 1 n (n-1) t
     getOffset n t (1,0)  = crop 1 0 (n-1) n t
-    
+
     getTiles :: Int -> TileImg -> [TileImg]
-    getTiles n pattern = 
-        [crop x y n n pattern | 
+    getTiles n pattern =
+        [crop x y n n pattern |
         (x,y) <- (getGrid (imageWidth pattern -1) (imageHeight pattern -1))]
 
 --Functions for collapsing a wave
@@ -78,7 +78,7 @@ module DemiGen.TileGen where
 
     --Core wave function collapse process. Loops until the Wave has been observed entirely, or a contradiction
     collapseWave :: EnabledTiles -> Wave -> Collapsed -> EntropyHeap -> StdGen -> Either StdGen Collapsed
-    collapseWave rules w cw h seed  
+    collapseWave rules w cw h seed
         | M.keys w == [] = Right cw
         | otherwise = do
             let (nCoOrd, nH)   = selectNextCoOrd w h
@@ -89,7 +89,7 @@ module DemiGen.TileGen where
 
     --select next coordinate, the one with lowest entropy
     selectNextCoOrd :: Wave -> EntropyHeap -> (CoOrd, EntropyHeap)
-    selectNextCoOrd w h 
+    selectNextCoOrd w h
             | M.member c w = (c,nH)
             | otherwise    = selectNextCoOrd w nH
            where c  = snd $ head $ H.take 1 h
@@ -111,7 +111,7 @@ module DemiGen.TileGen where
     --Collapse the immediate neighbors of a tile, and if their probability space shrinks, collapse that cell's neighbors next
     collapseNeighbors :: StdGen -> EnabledTiles -> Set Int -> [Neighbor] -> Wave -> EntropyHeap -> [CoOrd] -> Either StdGen (Wave, EntropyHeap, [CoOrd])
     collapseNeighbors _ _ _ [] w h next = Right (w,h,next)
-    collapseNeighbors s rules enablers ((d,n):ns) w h next 
+    collapseNeighbors s rules enablers ((d,n):ns) w h next
         | length collapsedPixel == length precollapsed = collapseNeighbors s rules enablers ns w h next
         | length collapsedPixel == 0 = Left s
         | otherwise                                    = collapseNeighbors s rules enablers ns newWave newHeap $ next ++ [n]
@@ -120,21 +120,21 @@ module DemiGen.TileGen where
               newWave        = M.insert n collapsedPixel w
               newHeap        = H.insert (getEntropy collapsedPixel, n) h
 
-    
+
 
     getEntropy :: Set (Int, Rational) -> Rational
     getEntropy weights = toRational $ - sum [realToFrac w * logBase 2 (realToFrac w :: Float)| (_, w) <- S.toList weights]
 
     getNeighbors :: Wave -> CoOrd -> [Neighbor]
-    getNeighbors w (x,y) = 
+    getNeighbors w (x,y) =
         L.filter (\(d,n) -> M.member n w) [((dx,dy),(x+dx,y+dy)) | (dx,dy) <- dirs]
 
     collapsePixel :: EnabledTiles -> Set Int -> CoOrd -> Set (Int, Rational) -> Set (Int, Rational)
-    collapsePixel rules enablers dir possible = 
-        S.filter (\(i, _)-> S.member i allowed) possible 
+    collapsePixel rules enablers dir possible =
+        S.filter (\(i, _)-> S.member i allowed) possible
         where
             allowed = S.unions [collapsePixel' rules e dir | e <- S.toList enablers]
-    
+
     collapsePixel' rules enabler dir  =
         M.findWithDefault S.empty (enabler, dir) rules
 
@@ -161,7 +161,7 @@ module DemiGen.TileGen where
     generateStartingWave coords freqs = foldl
         (\m pos -> M.insert pos freqs m) M.empty $
         coords
-    
+
     --generate an image with these parameters. WARNING; NOT GUARUNTEED TO HALT.
     generateUntilValid :: EnabledTiles -> Wave -> Collapsed -> EntropyHeap -> StdGen -> Collapsed
     generateUntilValid pairs w m h s =
