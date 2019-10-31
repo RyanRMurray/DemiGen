@@ -1,10 +1,10 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.31.2.
+-- This file has been generated from package.yaml by hpack version 0.31.0.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 3ae6a0d0646268d77401878c5ff0f9452b21a1395d4b3416f6acde184e2d9da5
+-- hash: cda9b2d4b456dcb164fd957f15798439b43f0aca5722109ea104871c98d5268e
 
 name:           DemiGen
 version:        0.1.0.0
@@ -34,7 +34,7 @@ library
   hs-source-dirs:
       src
   build-depends:
-      JuicyPixels
+      JuicyPixels >=3.3
     , JuicyPixels-extra
     , MonadRandom
     , base >=4.7 && <5
@@ -55,7 +55,7 @@ executable DemiGen-exe
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       DemiGen
-    , JuicyPixels
+    , JuicyPixels >=3.3
     , JuicyPixels-extra
     , MonadRandom
     , base >=4.7 && <5
@@ -77,7 +77,7 @@ test-suite DemiGen-test
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       DemiGen
-    , JuicyPixels
+    , JuicyPixels >=3.3
     , JuicyPixels-extra
     , MonadRandom
     , base >=4.7 && <5
