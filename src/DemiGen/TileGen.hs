@@ -112,15 +112,15 @@ module DemiGen.TileGen where
     collapseNeighbors :: StdGen -> EnabledTiles -> Set Int -> [Neighbor] -> Wave -> EntropyHeap -> [CoOrd] -> Either StdGen (Wave, EntropyHeap, [CoOrd])
     collapseNeighbors _ _ _ [] w h next = Right (w,h,next)
     collapseNeighbors s rules enablers ((d,n):ns) w h next 
-        | length collapsedPixel == length precollapsed = collapseNeighbors s rules enablers ns w h next
+        | newLength /= length precollapsed = collapseNeighbors s rules enablers ns newWave newHeap $ next ++ [n]
         | length collapsedPixel == 0 = Left s
-        | otherwise                                    = collapseNeighbors s rules enablers ns newWave newHeap $ next ++ [n]
+        | otherwise = collapseNeighbors s rules enablers ns w h next
         where precollapsed   = w M.! n
               collapsedPixel = collapsePixel rules enablers d precollapsed
               newWave        = M.insert n collapsedPixel w
               newHeap        = H.insert (getEntropy collapsedPixel, n) h
+              newLength      = length collapsedPixel
 
-    
 
     getEntropy :: Set (Int, Rational) -> Rational
     getEntropy weights = toRational $ - sum [realToFrac w * logBase 2 (realToFrac w :: Float)| (_, w) <- S.toList weights]
@@ -186,10 +186,10 @@ module DemiGen.TileGen where
         Right y <- readPng "Dungeon.png"
         let stream = convertRGB8 x
             dungeon = convertRGB8 y
-            (t1, c1) = generateFromImage stream 3 [noTransform] (getGrid 9 9) (mkStdGen 24644441)
+            (t1, c1) = generateFromImage stream 3 [noTransform] (getGrid 9 9) (mkStdGen 2464441)
             (t2, c2) = generateFromImage stream 3 withReflectionsAndRotations (getGrid 99 99) (mkStdGen 4201)
             (t3, c3) = generateFromImage dungeon 3 withRotations (getGrid 100 100) (mkStdGen 3333)
-            (t4, c4) = generateFromImage dungeon 3 withReflectionsAndRotations (getGrid 200 200) (mkStdGen 41411)
+            (t4, c4) = generateFromImage dungeon 3 withReflectionsAndRotations (getGrid 200 200) (mkStdGen 1411)
         print "Generating 10x10 'Stream' grid..."
         writePng "testout1.png" $ generateOutputImage (generatePixelList c1 t1) 10 10
         print "Done"
