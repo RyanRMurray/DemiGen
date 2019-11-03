@@ -106,7 +106,7 @@ module DemiGen.TileGen where
     propagate s rules (t:ts) w h =
         case collapseNeighbors s rules (S.map fst $ w M.! t) (getNeighbors w t) w h [] of
             Left err -> Left err
-            Right (nW, nH, next) -> propagate s rules (next ++ ts) nW nH
+            Right (nW, nH, next) -> propagate s rules (nub $ ts ++ next) nW nH
 
     --Collapse the immediate neighbors of a tile, and if their probability space shrinks, collapse that cell's neighbors next
     collapseNeighbors :: StdGen -> EnabledTiles -> Set Int -> [Neighbor] -> Wave -> EntropyHeap -> [CoOrd] -> Either StdGen (Wave, EntropyHeap, [CoOrd])
@@ -189,10 +189,10 @@ module DemiGen.TileGen where
             (t1, c1) = generateFromImage stream 3 [noTransform] (getGrid 9 9) (mkStdGen 24644441)
             (t2, c2) = generateFromImage stream 3 withReflectionsAndRotations (getGrid 99 99) (mkStdGen 4201)
             (t3, c3) = generateFromImage dungeon 3 withRotations (getGrid 100 100) (mkStdGen 3333)
-            (t4, c4) = generateFromImage dungeon 3 withReflectionsAndRotations (getGrid 200 200) (mkStdGen 41411)
-        print "Generating 10x10 'Stream' grid..."
-        writePng "testout1.png" $ generateOutputImage (generatePixelList c1 t1) 10 10
-        print "Done"
+            (t4, c4) = generateFromImage dungeon 3 withReflections (getGrid 200 200) (mkStdGen 41411)
+        --print "Generating 10x10 'Stream' grid..."
+        --writePng "testout1.png" $ generateOutputImage (generatePixelList c1 t1) 10 10
+        --print "Done"
         print "Generating 100x100 'Stream' grid..."
         writePng "testout2.png" $ generateOutputImage (generatePixelList c2 t2) 100 100
         print "Done"
