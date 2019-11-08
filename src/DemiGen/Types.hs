@@ -7,6 +7,17 @@ module DemiGen.Types where
     import           Data.Heap (MinHeap)
     import           Data.Set (Set)
 
+
+--Simple functions for grid-based processes
+
+    dirs :: [CoOrd]
+    dirs = [(0,-1),(-1,0),(0,1),(1,0)]
+
+    getGrid :: Int -> Int -> [CoOrd]
+    getGrid x y = concat [getGrid' x row| row <- [0..y]]
+    getGrid' x row = [(col,row) | col <- [0..x]]
+
+--Types and globals for TileGen
     type Pix = PixelRGB8
     type TileImg = Image Pix                        --Type of image to import and export
 
@@ -22,18 +33,7 @@ module DemiGen.Types where
 
     defaultTilePixel = PixelRGB8 255 0 127
 
-
---Simple functions for grid-based processes
-
-    dirs :: [CoOrd]
-    dirs = [(0,-1),(-1,0),(0,1),(1,0)]
-
-    getGrid :: Int -> Int -> [CoOrd]
-    getGrid x y = concat [getGrid' x row| row <- [0..y]]
-    getGrid' x row = [(col,row) | col <- [0..x]]
-
---Options for enriching input tile data
-
+    --Options for enriching input tile data
     noTransform :: Transform
     noTransform img = img
 
@@ -67,3 +67,23 @@ module DemiGen.Types where
 
     repeatPattern :: Transform
     repeatPattern p = below [beside [p, p], beside [p, p]]
+
+--types and globals for TreeGen
+    --Think of a room as a node in a tree, where doors are connected nodes.
+    data Room = Room
+        { tiles :: Set CoOrd
+        , doors :: [Door]
+        } deriving (Show)
+
+    type Door = (CoOrd, Maybe Room)
+
+    data Cell = Empty | Occupied | Conn
+        deriving (Show, Eq)
+
+    type Dungeon = Map CoOrd Cell
+
+    doorPixel :: PixelRGB8
+    doorPixel = PixelRGB8 255 0 0
+
+    tilePixel :: PixelRGB8
+    tilePixel = PixelRGB8 0 0 0

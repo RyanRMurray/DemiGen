@@ -8,6 +8,7 @@ module DemiGen.TreeGen where
     import           Data.Map (Map)
     import           Data.Heap (MinHeap)
     import           Data.Set (Set)
+    import           Data.Either
 
     import           System.Random
     import           Control.Monad.Random as Rand
@@ -15,26 +16,7 @@ module DemiGen.TreeGen where
     import           Codec.Picture
     import           Codec.Picture.Extra
 
-    --Think of a room as a node in a tree, where doors are connected nodes.
-    data Room = Room
-        { tiles :: Set CoOrd
-        , doors :: [Door]
-        } deriving (Show)
-
-    type Door = (CoOrd, Maybe Room)
-
-    data Cell = Empty | Occupied | Conn
-        deriving (Show)
-
-    type Dungeon = Map CoOrd Cell
-
-    doorPixel :: PixelRGB8
-    doorPixel = PixelRGB8 255 0 0
-
-    tilePixel :: PixelRGB8
-    tilePixel = PixelRGB8 0 0 0
-
---Functions for generating input room templates
+--Functions for generating input room templates and starting dungeon
 --------------------------------------------------------------------------------------------------------
 
     getRoomData :: TileImg -> Room
@@ -45,6 +27,19 @@ module DemiGen.TreeGen where
         where
             doors = (getTargetPixels input doorPixel)
 
+    roomNames :: [String]
+    roomNames =
+        [ "hall01", "hall02", "hall03"
+        , "room01", "room02", "room03", "room04", "room05", "room06", "room07", "room08", "room09", "room10"
+        , "special01", "special02", "special03"
+        ]
+
+    allRooms :: IO [Room]
+    allRooms =
+        L.map getRoomData <$> L.map convertRGB8 <$> rights <$> ios
+        where
+            ios = mapM (\n-> readPng $ n++".png") roomNames
+
     getTargetPixels :: TileImg -> PixelRGB8 -> [CoOrd]
     getTargetPixels input px = filter
         (\(x,y)-> px == pixelAt input x y) $
@@ -54,6 +49,8 @@ module DemiGen.TreeGen where
     generateDungeonGrid x y = M.fromList
         [(c, Empty) | c <- getGrid x y]
 
+--Functions for finding valid placements of rooms and inserting them into the dungeon
+---------------------------------------------------------------------------------------------------
     rotateRoom :: Room -> Int -> Room
     rotateRoom r 0 = r
     rotateRoom r 1 = rotateRoom' r (\(x,y) -> (y, 12 - x))
@@ -69,5 +66,3 @@ module DemiGen.TreeGen where
         L.foldl (\dg ((x,y),_) -> M.insert (x+ox,y+oy) Conn dg) d2 $ doors r
         where
             d2 = S.foldl (\dg (x,y) -> M.insert (x+ox,y+oy) Occupied dg) d (tiles r)
-
-    
