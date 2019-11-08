@@ -26,6 +26,8 @@ module DemiGen.TreeGen where
     data Cell = Empty | Occupied | Conn
         deriving (Show)
 
+    type Dungeon = Map CoOrd Cell
+
     doorPixel :: PixelRGB8
     doorPixel = PixelRGB8 255 0 0
 
@@ -61,3 +63,11 @@ module DemiGen.TreeGen where
     rotateRoom' r f = Room
         (S.map f $ tiles r)
         (L.map (\(c,n) -> (f c,n)) $ doors r)
+
+    insertRoom :: Dungeon -> Room -> CoOrd -> Dungeon
+    insertRoom d r (ox, oy) =
+        L.foldl (\dg ((x,y),_) -> M.insert (x+ox,y+oy) Conn dg) d2 $ doors r
+        where
+            d2 = S.foldl (\dg (x,y) -> M.insert (x+ox,y+oy) Occupied dg) d (tiles r)
+
+    
