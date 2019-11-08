@@ -45,7 +45,7 @@ module DemiGen.TileGen where
     getTileFrequencies' pattern ts = S.fromList $ M.toList $ foldl (\m t -> M.insertWith (+) (fromJust $ elemIndex t ts) 1.0 m) M.empty pattern
 
     --take a set of (unique) tiles and determine which can be overlapped as neighbors
-    processAdjacencyRules :: Int -> [TileImg] -> EnabledTiles
+    processAdjacencyRules :: Int -> [TileImg] -> AdjRules
     processAdjacencyRules n ts = foldl
             (\m (a,b,d)-> M.insertWith (S.union) (a,d) (S.singleton b) m)
             M.empty $
@@ -77,14 +77,14 @@ module DemiGen.TileGen where
 --------------------------------------------------------------------------------------------------------
 
     --Core wave function collapse process. Loops until the Wave has been observed entirely, or a contradiction
-    collapseWave :: EnabledTiles -> Wave -> Grid -> EntropyHeap -> StdGen -> Either StdGen Grid
+    collapseWave :: AdjRules -> Wave -> Grid -> EntropyHeap -> StdGen -> Either StdGen Grid
     collapseWave rules w cw h seed
         | M.keys w == [] = Right cw
         | otherwise = do
-            let (nCoOrd, nH)   = selectNextCoOrd w h
-            (nTile, nSeed)     <- observePixel (w M.! nCoOrd) seed nCoOrd
-            let nCw            = M.insert nCoOrd nTile cw
-            (nW, nH2) <- propagate rules [nCoOrd] (M.insert nCoOrd (S.singleton (nTile,1.0)) w) nH
+            let (nCoOrd, nH)  = selectNextCoOrd w h
+            (nTile, nSeed)    <- observePixel (w M.! nCoOrd) seed nCoOrd
+            let nCw           = M.insert nCoOrd nTile cw
+                (nW, nH2)     = propagate rules [nCoOrd] (M.insert nCoOrd (S.singleton (nTile,1.0)) w) nH
             collapseWave rules (M.delete nCoOrd nW) nCw nH2 nSeed
 
     --select next coordinate, the one with lowest entropy
@@ -97,23 +97,23 @@ module DemiGen.TileGen where
 
     --Collapse the probability space of a cell to a single tile
     observePixel :: TileFreqs -> StdGen -> CoOrd -> Either StdGen (Int, StdGen)
-    observePixel fs seed coord 
-        | S.length fs == 0 = Left StdGen
-        | otherwise        = Rand.runRand (Rand.fromList $ S.toList $ w M.! coord) seed
+    observePixel fs seed coord
+        | S.size fs == 0 = Left seed
+        | otherwise      = Right $ Rand.runRand (Rand.fromList $ S.toList $ fs) seed
 
     --Collapse probability space of connected cells based on adjacency rules. If a cell has no possible tiles,
     --return a contradiction.
-    propagate :: EnabledTiles -> [CoOrd] -> Wave -> EntropyHeap -> Either StdGen (Wave, EntropyHeap)
-    propagate _ [] w h = Right (w,h)
+    propagate :: AdjRules -> [CoOrd] -> Wave -> EntropyHeap -> (Wave, EntropyHeap)
+    propagate _ [] w h = (w,h)
     propagate rules (t:ts) w h =
-            propagate rules (nub $ [ts] : next) nW nH
+            propagate rules (nub $ ts ++ next) nW nH
         where
             (nW, nH, next) = collapseNeighbors rules (S.map fst $ w M.! t) (getNeighbors w t) w h []
 
     --Collapse the immediate neighbors of a tile, and if their probability space shrinks, collapse that cell's neighbors next
-    collapseNeighbors :: EnabledTiles -> Set Int -> [Neighbor] -> Wave -> EntropyHeap -> [CoOrd] -> Either StdGen (Wave, EntropyHeap, [CoOrd])
-    collapseNeighbors _ _ [] w h next = Right (w,h,next)
-    collapseNeighbors rules enablers ((d,n):ns) w h next 
+    collapseNeighbors :: AdjRules -> Set Int -> [Neighbor] -> Wave -> EntropyHeap -> [CoOrd] -> (Wave, EntropyHeap, [CoOrd])
+    collapseNeighbors _ _ [] w h next = (w,h,next)
+    collapseNeighbors rules enablers ((d,n):ns) w h next
         | newLength /= length precollapsed = collapseNeighbors rules enablers ns newWave newHeap $ next ++ [n]
         | otherwise                        = collapseNeighbors rules enablers ns w h next
         where precollapsed   = w M.! n
@@ -130,11 +130,11 @@ module DemiGen.TileGen where
     getNeighbors w (x,y) =
         L.filter (\(d,n) -> M.member n w) [((dx,dy),(x+dx,y+dy)) | (dx,dy) <- dirs]
 
-    collapsePixel :: EnabledTiles -> Set Int -> CoOrd -> Set (Int, Rational) -> Set (Int, Rational)
+    collapsePixel :: AdjRules -> Set Int -> CoOrd -> Set (Int, Rational) -> Set (Int, Rational)
     collapsePixel rules enablers dir possible =
         S.filter (\(i, _)-> S.member i allowed) possible
         where
-            allowed = S.unions [collapsePixel' rules e dir | e <- S.toList enablers]
+            allowed = S.foldl (\s e -> S.union s (collapsePixel' rules e dir)) S.empty enablers
 
     collapsePixel' rules enabler dir  =
         M.findWithDefault S.empty (enabler, dir) rules
@@ -164,7 +164,7 @@ module DemiGen.TileGen where
         coords
 
     --generate an image with these parameters. WARNING; NOT GUARUNTEED TO HALT.
-    generateUntilValid :: EnabledTiles -> Wave -> Grid -> EntropyHeap -> StdGen -> Grid
+    generateUntilValid :: AdjRules -> Wave -> Grid -> EntropyHeap -> StdGen -> Grid
     generateUntilValid pairs w m h s =
         case collapseWave pairs w m h s of
             Left ns -> generateUntilValid pairs w m h ns
@@ -174,10 +174,10 @@ module DemiGen.TileGen where
     generateFromImage input tileSize transformations shape seed =
         let (tiles, freqs) = getTileData input tileSize transformations
             rules          = processAdjacencyRules tileSize tiles
-            (randPos, s2)  = Rand.runRand (Rand.fromList [(pos, 1.0) | pos <- shape])  seed
-            heap           = H.singleton(0.0,randPos)
+            start          = fst $ maximumBy (comparing snd) [((x,y), x*y) | (x,y) <- shape]
+            heap           = H.singleton (0.0, start)
             startWave      = generateStartingWave shape freqs
-            collapsed      = generateUntilValid rules startWave M.empty heap s2
+            collapsed      = generateUntilValid rules startWave M.empty heap seed
         in
             (tiles, collapsed)
 

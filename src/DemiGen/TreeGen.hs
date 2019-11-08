@@ -15,20 +15,49 @@ module DemiGen.TreeGen where
     import           Codec.Picture
     import           Codec.Picture.Extra
 
-    type Door = Door
-        { pos  :: CoOrd
-        , dir  :: CoOrd
-        , conn :: Maybe Room
-        }
-
-    data Cell = Empty | Room | Door
-
-    type Room = Room
+    --Think of a room as a node in a tree, where doors are connected nodes.
+    data Room = Room
         { tiles :: Set CoOrd
-        , doors :: Set Door
-        }
+        , doors :: [Door]
+        } deriving (Show)
+
+    type Door = (CoOrd, Maybe Room)
+
+    data Cell = Empty | Occupied | Conn
+        deriving (Show)
+
+    doorPixel :: PixelRGB8
+    doorPixel = PixelRGB8 255 0 0
+
+    tilePixel :: PixelRGB8
+    tilePixel = PixelRGB8 0 0 0
 
 --Functions for generating input room templates
 --------------------------------------------------------------------------------------------------------
 
-    
+    getRoomData :: TileImg -> Room
+    getRoomData input = Room
+        (S.fromList $ getTargetPixels input tilePixel) $
+        zip doors
+            (replicate (length doors) Nothing)
+        where
+            doors = (getTargetPixels input doorPixel)
+
+    getTargetPixels :: TileImg -> PixelRGB8 -> [CoOrd]
+    getTargetPixels input px = filter
+        (\(x,y)-> px == pixelAt input x y) $
+        getGrid 12 12
+
+    generateDungeonGrid :: Int -> Int -> Map CoOrd Cell
+    generateDungeonGrid x y = M.fromList
+        [(c, Empty) | c <- getGrid x y]
+
+    rotateRoom :: Room -> Int -> Room
+    rotateRoom r 0 = r
+    rotateRoom r 1 = rotateRoom' r (\(x,y) -> (y, 12 - x))
+    rotateRoom r 2 = rotateRoom' r (\(x,y) -> (12 - x, 12 - y))
+    rotateRoom r 3 = rotateRoom' r (\(x,y) -> (12 - y, x))
+
+    rotateRoom' r f = Room
+        (S.map f $ tiles r)
+        (L.map (\(c,n) -> (f c,n)) $ doors r)

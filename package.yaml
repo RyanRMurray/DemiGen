@@ -28,7 +28,7 @@ dependencies:
 - ghc
 - split
 - heap
-- hip
+# grid
 - base >= 4.7 && < 5
 
 library:
