@@ -13,7 +13,7 @@ module DemiGen.Types where
     type TileFreqs = Set (Int, Rational)            --Set of tile indexes with their relative rarity
     type CoOrd = (Int, Int)                         --Simple cartesian integer coordinates
     type Wave = Map CoOrd TileFreqs                 --Un or partially collapsed wavefunction containing a grid of possible tile indexes
-    type Collapsed = Map CoOrd Int                  --Fully collapsed wavefunction containing a grid of tile indexes
+    type Grid = Map CoOrd Int                  --Fully collapsed wavefunction containing a grid of tile indexes
     type Neighbor = (CoOrd,CoOrd)                   --Coordinates of a neighboring tile and its relative direction
     type EntropyHeap = MinHeap (Rational, CoOrd)    --Heap listing partially collapsed cells by their relative entropy
     type EnabledTiles = Map (Int, CoOrd) (Set Int)  --Map of tiles and a direction onto what tiles are valid for that space

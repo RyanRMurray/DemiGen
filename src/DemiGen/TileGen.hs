@@ -77,14 +77,14 @@ module DemiGen.TileGen where
 --------------------------------------------------------------------------------------------------------
 
     --Core wave function collapse process. Loops until the Wave has been observed entirely, or a contradiction
-    collapseWave :: EnabledTiles -> Wave -> Collapsed -> EntropyHeap -> StdGen -> Either StdGen Collapsed
+    collapseWave :: EnabledTiles -> Wave -> Grid -> EntropyHeap -> StdGen -> Either StdGen Grid
     collapseWave rules w cw h seed
         | M.keys w == [] = Right cw
         | otherwise = do
             let (nCoOrd, nH)   = selectNextCoOrd w h
-                (nTile, nSeed) = observePixel w seed nCoOrd
-                nCw            = M.insert nCoOrd nTile cw
-            (nW, nH2) <- propagate nSeed rules [nCoOrd] (M.insert nCoOrd (S.singleton (nTile,1.0)) w) nH
+            (nTile, nSeed)     <- observePixel (w M.! nCoOrd) seed nCoOrd
+            let nCw            = M.insert nCoOrd nTile cw
+            (nW, nH2) <- propagate rules [nCoOrd] (M.insert nCoOrd (S.singleton (nTile,1.0)) w) nH
             collapseWave rules (M.delete nCoOrd nW) nCw nH2 nSeed
 
     --select next coordinate, the one with lowest entropy
@@ -96,25 +96,26 @@ module DemiGen.TileGen where
                  nH = H.drop 1 h
 
     --Collapse the probability space of a cell to a single tile
-    observePixel :: Wave -> StdGen -> CoOrd -> (Int, StdGen)
-    observePixel w seed coord = Rand.runRand (Rand.fromList $ S.toList $ w M.! coord) seed
+    observePixel :: TileFreqs -> StdGen -> CoOrd -> Either StdGen (Int, StdGen)
+    observePixel fs seed coord 
+        | S.length fs == 0 = Left StdGen
+        | otherwise        = Rand.runRand (Rand.fromList $ S.toList $ w M.! coord) seed
 
     --Collapse probability space of connected cells based on adjacency rules. If a cell has no possible tiles,
     --return a contradiction.
-    propagate :: StdGen -> EnabledTiles -> [CoOrd] -> Wave -> EntropyHeap -> Either StdGen (Wave, EntropyHeap)
-    propagate _ _ [] w h = Right (w,h)
-    propagate s rules (t:ts) w h =
-        case collapseNeighbors s rules (S.map fst $ w M.! t) (getNeighbors w t) w h [] of
-            Left err -> Left err
-            Right (nW, nH, next) -> propagate s rules (nub $ ts ++ next) nW nH
+    propagate :: EnabledTiles -> [CoOrd] -> Wave -> EntropyHeap -> Either StdGen (Wave, EntropyHeap)
+    propagate _ [] w h = Right (w,h)
+    propagate rules (t:ts) w h =
+            propagate rules (nub $ [ts] : next) nW nH
+        where
+            (nW, nH, next) = collapseNeighbors rules (S.map fst $ w M.! t) (getNeighbors w t) w h []
 
     --Collapse the immediate neighbors of a tile, and if their probability space shrinks, collapse that cell's neighbors next
-    collapseNeighbors :: StdGen -> EnabledTiles -> Set Int -> [Neighbor] -> Wave -> EntropyHeap -> [CoOrd] -> Either StdGen (Wave, EntropyHeap, [CoOrd])
-    collapseNeighbors _ _ _ [] w h next = Right (w,h,next)
-    collapseNeighbors s rules enablers ((d,n):ns) w h next 
-        | newLength /= length precollapsed = collapseNeighbors s rules enablers ns newWave newHeap $ next ++ [n]
-        | length collapsedPixel == 0 = Left s
-        | otherwise = collapseNeighbors s rules enablers ns w h next
+    collapseNeighbors :: EnabledTiles -> Set Int -> [Neighbor] -> Wave -> EntropyHeap -> [CoOrd] -> Either StdGen (Wave, EntropyHeap, [CoOrd])
+    collapseNeighbors _ _ [] w h next = Right (w,h,next)
+    collapseNeighbors rules enablers ((d,n):ns) w h next 
+        | newLength /= length precollapsed = collapseNeighbors rules enablers ns newWave newHeap $ next ++ [n]
+        | otherwise                        = collapseNeighbors rules enablers ns w h next
         where precollapsed   = w M.! n
               collapsedPixel = collapsePixel rules enablers d precollapsed
               newWave        = M.insert n collapsedPixel w
@@ -133,8 +134,7 @@ module DemiGen.TileGen where
     collapsePixel rules enablers dir possible =
         S.filter (\(i, _)-> S.member i allowed) possible
         where
-            allowed = 
-                S.foldl (\s e -> S.union s (collapsePixel' rules e dir)) S.empty enablers
+            allowed = S.unions [collapsePixel' rules e dir | e <- S.toList enablers]
 
     collapsePixel' rules enabler dir  =
         M.findWithDefault S.empty (enabler, dir) rules
@@ -146,7 +146,7 @@ module DemiGen.TileGen where
     indexPix :: TileImg -> Pix
     indexPix t = pixelAt t 0 0
 
-    generatePixelList :: Collapsed -> [TileImg] -> Map CoOrd Pix
+    generatePixelList :: Grid -> [TileImg] -> Map CoOrd Pix
     generatePixelList cw ts =
         M.fromList [(c, indexPix $ ts !! i) | (c,i) <- M.toList cw]
 
@@ -164,26 +164,22 @@ module DemiGen.TileGen where
         coords
 
     --generate an image with these parameters. WARNING; NOT GUARUNTEED TO HALT.
-    generateUntilValid :: EnabledTiles -> Wave -> Collapsed -> EntropyHeap -> StdGen -> Collapsed
+    generateUntilValid :: EnabledTiles -> Wave -> Grid -> EntropyHeap -> StdGen -> Grid
     generateUntilValid pairs w m h s =
         case collapseWave pairs w m h s of
             Left ns -> generateUntilValid pairs w m h ns
             Right cw -> cw
 
-    generateFromImage :: TileImg -> Int -> [Transform] -> [CoOrd] -> StdGen -> ([TileImg], Collapsed)
+    generateFromImage :: TileImg -> Int -> [Transform] -> [CoOrd] -> StdGen -> ([TileImg], Grid)
     generateFromImage input tileSize transformations shape seed =
         let (tiles, freqs) = getTileData input tileSize transformations
             rules          = processAdjacencyRules tileSize tiles
-            start          = fst $ maximumBy (comparing snd) [((x,y), x*y)| (x,y) <- shape]
-            heap           = H.singleton(0.0,start)
+            (randPos, s2)  = Rand.runRand (Rand.fromList [(pos, 1.0) | pos <- shape])  seed
+            heap           = H.singleton(0.0,randPos)
             startWave      = generateStartingWave shape freqs
-            collapsed      = generateUntilValid rules startWave M.empty heap seed
+            collapsed      = generateUntilValid rules startWave M.empty heap s2
         in
             (tiles, collapsed)
-
-
-    testL :: [CoOrd]
-    testL = (getGrid 100 50) ++ (getGrid 50 100)
 
     --temporary function for testing
     testout = do
@@ -193,8 +189,8 @@ module DemiGen.TileGen where
             dungeon = convertRGB8 y
             (t1, c1) = generateFromImage stream 3 [noTransform] (getGrid 9 9) (mkStdGen 2464441)
             (t2, c2) = generateFromImage stream 3 withReflectionsAndRotations (getGrid 99 99) (mkStdGen 4201)
-            (t3, c3) = generateFromImage dungeon 3 withRotations (testL) (mkStdGen 3333)
-            (t4, c4) = generateFromImage dungeon 3 withReflections (getGrid 200 200) (mkStdGen 4102)
+            (t3, c3) = generateFromImage dungeon 3 withRotations (getGrid 100 100) (mkStdGen 3333)
+            (t4, c4) = generateFromImage dungeon 3 withReflections (getGrid 200 200) (mkStdGen 41411)
         --print "Generating 10x10 'Stream' grid..."
         --writePng "testout1.png" $ generateOutputImage (generatePixelList c1 t1) 10 10
         --print "Done"
