@@ -133,7 +133,8 @@ module DemiGen.TileGen where
     collapsePixel rules enablers dir possible =
         S.filter (\(i, _)-> S.member i allowed) possible
         where
-            allowed = S.unions [collapsePixel' rules e dir | e <- S.toList enablers]
+            allowed = 
+                S.foldl (\s e -> S.union s (collapsePixel' rules e dir)) S.empty enablers
 
     collapsePixel' rules enabler dir  =
         M.findWithDefault S.empty (enabler, dir) rules
@@ -173,12 +174,16 @@ module DemiGen.TileGen where
     generateFromImage input tileSize transformations shape seed =
         let (tiles, freqs) = getTileData input tileSize transformations
             rules          = processAdjacencyRules tileSize tiles
-            (randPos, s2)  = Rand.runRand (Rand.fromList [(pos, 1.0) | pos <- shape])  seed
-            heap           = H.singleton(0.0,randPos)
+            start          = fst $ maximumBy (comparing snd) [((x,y), x*y)| (x,y) <- shape]
+            heap           = H.singleton(0.0,start)
             startWave      = generateStartingWave shape freqs
-            collapsed      = generateUntilValid rules startWave M.empty heap s2
+            collapsed      = generateUntilValid rules startWave M.empty heap seed
         in
             (tiles, collapsed)
+
+
+    testL :: [CoOrd]
+    testL = (getGrid 100 50) ++ (getGrid 50 100)
 
     --temporary function for testing
     testout = do
@@ -188,8 +193,8 @@ module DemiGen.TileGen where
             dungeon = convertRGB8 y
             (t1, c1) = generateFromImage stream 3 [noTransform] (getGrid 9 9) (mkStdGen 2464441)
             (t2, c2) = generateFromImage stream 3 withReflectionsAndRotations (getGrid 99 99) (mkStdGen 4201)
-            (t3, c3) = generateFromImage dungeon 3 withRotations (getGrid 100 100) (mkStdGen 3333)
-            (t4, c4) = generateFromImage dungeon 3 withReflections (getGrid 200 200) (mkStdGen 41411)
+            (t3, c3) = generateFromImage dungeon 3 withRotations (testL) (mkStdGen 3333)
+            (t4, c4) = generateFromImage dungeon 3 withReflections (getGrid 200 200) (mkStdGen 4102)
         --print "Generating 10x10 'Stream' grid..."
         --writePng "testout1.png" $ generateOutputImage (generatePixelList c1 t1) 10 10
         --print "Done"
