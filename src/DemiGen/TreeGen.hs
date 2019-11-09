@@ -23,7 +23,7 @@ module DemiGen.TreeGen where
     getRoomData input = Room
         (S.fromList $ getTargetPixels input tilePixel) $
         zip doors
-            (replicate (length doors) Nothing)
+            (replicate (length doors) Blocked)
         where
             doors = (getTargetPixels input doorPixel)
 
@@ -38,7 +38,7 @@ module DemiGen.TreeGen where
     allRooms =
         L.map getRoomData <$> L.map convertRGB8 <$> rights <$> ios
         where
-            ios = mapM (\n-> readPng $ n++".png") roomNames
+            ios = mapM (\n-> readPng $ "assets/rooms/"++n++".png") roomNames
 
     getTargetPixels :: TileImg -> PixelRGB8 -> [CoOrd]
     getTargetPixels input px = filter
@@ -53,16 +53,39 @@ module DemiGen.TreeGen where
 ---------------------------------------------------------------------------------------------------
     rotateRoom :: Room -> Int -> Room
     rotateRoom r 0 = r
-    rotateRoom r 1 = rotateRoom' r (\(x,y) -> (y, 12 - x))
-    rotateRoom r 2 = rotateRoom' r (\(x,y) -> (12 - x, 12 - y))
-    rotateRoom r 3 = rotateRoom' r (\(x,y) -> (12 - y, x))
+    rotateRoom r 1 = rotateRoom' r (\(x,y) -> (y, 12 - x))       
+    rotateRoom r 2 = rotateRoom' r (\(x,y) -> (12 - x, 12 - y)) 
+    rotateRoom r 3 = rotateRoom' r (\(x,y) -> (12 - y, x))      
 
     rotateRoom' r f = Room
-        (S.map f $ tiles r)
-        (L.map (\(c,n) -> (f c,n)) $ doors r)
+        (S.map f $ tiles r) $
+        L.map (\(c,n) -> (f c,n)) $ doors r
+    
+    offsetRoom :: Room -> CoOrd -> Room
+    offsetRoom r (ox,oy) = Room
+            (S.map (\(x,y)->(x+ox,y+oy)) $ tiles r) $
+            L.map (\((x,y),n)->((x+ox,y+oy),n)) $ doors r
+
+    noCollision :: Dungeon -> Room -> CoOrd -> Bool
+    noCollision d (Room ts _) (ox,oy) = 
+        and [isFree d (x+ox,y+oy) | (x,y) <- S.toList ts]
+    
+    isFree d c = d M.! c /= Occupied
 
     insertRoom :: Dungeon -> Room -> CoOrd -> Dungeon
     insertRoom d r (ox, oy) =
         L.foldl (\dg ((x,y),_) -> M.insert (x+ox,y+oy) Conn dg) d2 $ doors r
         where
             d2 = S.foldl (\dg (x,y) -> M.insert (x+ox,y+oy) Occupied dg) d (tiles r)
+
+--test outputs
+---------------------------------------------------------------------------------------------------
+    
+    printRawDungeon :: Dungeon -> Int -> Int -> IO ()
+    printRawDungeon d x y = writePng "dungeontestout.png" $
+        generateImage (\x y -> printDungeonPixel $ d M.! (x,y)) x y
+
+    printDungeonPixel :: Cell -> PixelRGB8
+    printDungeonPixel Conn = doorPixel
+    printDungeonPixel Occupied = tilePixel
+    printDungeonPixel Empty = PixelRGB8 255 255 255
