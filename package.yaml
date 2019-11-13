@@ -23,6 +23,7 @@ dependencies:
 - random
 - MonadRandom
 - containers
+- unordered-containers
 - JuicyPixels >= 3.3
 - JuicyPixels-extra
 - ghc
