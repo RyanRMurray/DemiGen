@@ -1,0 +1,73 @@
+\documentclass{article}
+\usepackage{array, tabularx}
+\usepackage{cellspace}
+\usepackage{appendix}
+
+\begin{document}
+\thispagestyle{plain}
+\begin{center}
+    \Large
+    \textbf{DemiGen: Procedurally Generating Content for Dungeons \& Dragons}
+ 
+    \vspace{0.4cm}
+    \large
+    Progress Report
+ 
+    \vspace{0.4cm}
+    \textbf{By Ryan Murray}
+
+    \vspace{0.4cm}
+    \large
+    Supervised by Michael Gale
+\end{center}
+
+\section{Project Overview}
+
+With the continued success of Tabletop Roleplaying Games (TTRPGs) comes the increasing desire to streamline the more complex minutae that is required for these games to be played. One component that is required for most games and styles of play is a defined 'map' of the world the game takes place in. Maps in this case refers to physical locations in the game's setting, such as a building, town, dungeon, ect. \textit{Dungeons & Dragons} for example makes much use of distance, cover and areas of effect that are best resolved using a concretely defined map. Considering the physical space one's character occupies and using terrain to one's advantage is often a satisfying experience. While there is a vast library of freely available pre-made maps online, it may be difficult for a Game Master (GM) to find one that perfectly meets their requirements. They may require one or more specific kinds of locations, or a certain number of encounters. Generally, the solution is for a GM to create their own worlds, which requires consideration of minute details such as the layout of each individual room in a map consisting of dozens of rooms. This can often be challenging for new GMs, who often resort to empty, flat rooms that are quick to design but does not allow for more tactical approaches to combat. 
+
+
+
+While there are a few free solutions available online for generating dungeon spaces, it was found that the dungeons they generated were often uninteresting, relying on either plain rectangular rooms connected by corridors, or predictably spaced entrance points that place a limit on the potential layouts of a space.
+
+
+
+The aim of this project is to produce software that would enable beginner GMs to generate maps that suit their needs. It consists of a few layers that each generate a certain element of the map; the order rooms are connected in, what rooms appear, and what appears in those rooms. A more thorough specification can be found in Appendix A.
+
+
+
+The main problem that this project aims to tackle is the difficulty in producing 'interesting' terrain through procedural generation. The freely available solutions online produce predictably structured levels as they make use of simple algorithms. By investigating more novel forms of procedural generation, this project may produce higher quality maps. 
+
+
+\section{Preliminary Research on Procedural Terrain Generation}
+Much of the research that has been done into producing randomly generated terrain has been focused on its application in the development of video games. Also present in the research is attempts to define the layouts of man-made structures by a set of rules that can be implemented by an algorithm. 
+
+
+
+Of particular note is the implementation of terrain generation in the \textit{Roguelike} genre of video games. Many of these games draw inspiration from TTRPGs themselves, and as such try to emulate a subset of the common gameplay loops found in such games. Generally, they focus on avoiding or fighting various types of enemies to attain better equipment and resources to take on greater challenges for greater rewards. As such, much of the focus is on the interaction between players and enemies, and various ways of finding and using loot. Older roguelikes often made use of algorithms that'd generate either a series of rectangular rooms or irregularly shaped cave-like networks. Modern games often make use of pre-fabricated modular rooms that are connected together by some criteria (such as specification of a certain number of rooms, or the requirement of special encounter rooms). \linebreak
+While the former often resulted in inconsistent difficulty spikes due to a lack of loot or high concentration of enemies, the latter sacrifices the range of possible layouts of maps for more consistently balanced challenges. As a GM can fine-tune the challenge of an area on the fly, this project will consider more novel and open-ended terrain generation algorithms. As a result, the balance tradeoff in modern roguelikes is less useful. An implementation of such an algorithm would result in series of maps that reuse assets and as such may become stale and uninteresting for players.
+
+
+
+The open-source project "WaveFunctionCollapse" on Github presents a novel algorithm for producing arbitrarily large images from small input patterns. By deducing a set of rules from an image (sub-pattern frequency, adjacency of patterns), the algorithm can produce cohesive images that contain frequencies of pixel patterns comparable to those of the input. However, this approach has a number of implementations that make it less suited for generating entire maps, particularly structured locations such as buildings or dungeons. In particular; the user would be required to specify much of the map's layout to guaruntee a minimum number of meaningful locations, and even then the total number of discrete locations can be unpredictable.
+
+
+
+x and y identified and demonstrated an algorithm for generating random dungeons using a genetic algorithm. By producing a set of trees in which nodes correspond to pre-fabricated rooms and edges the physical connections between them, then comparing them by a set of criteria, the algorithm produces dungeons that are well-connected and diverse. By adding extra criterias, it is possible to generate more interesting maps, such as ones in which discrete areas are connected by "special event" rooms. However, this runs into the aformentioned problem of prefabricated rooms becoming predictable and uninteresting. 
+
+
+
+A novel way of producing randomly generated structures was explored by x and y using Shape Grammars. Like Context-Free Grammars, Shape Grammars rely on a set of rules defining what permutations can follow a given starting point. But instead of producing strings, they generate structures in multidimensional space. x and y demonstrate both 2d and 3d implementations. However, the implementation of arbitary shape grammars remains an unsolved problem, and the development of the required shape grammars for dungeon generation would in itself be a large undertaking.
+
+
+\pagebreak
+
+\appendix
+\section{Project Specification}
+
+\begin{itemize}
+    \item Create software that produces randomly generated quality maps of locations that can be used in \textit{Dungeons \& Dragons 5th Edition}
+    \item Implement themes, specifying constraints and rules that generate maps that are identifiable as matching that theme
+    \item Allow the user to impose constraints on the shape and content of the maps generated by the software
+    \item Compare created software with freely available competing tools
+\end{itemize}
+\end{document}
