@@ -7,21 +7,6 @@ module DemiGen.Types where
     import           Data.Heap (MinHeap)
     import           Data.Set (Set)
 
-    type Pix = PixelRGB8
-    type TileImg = Image Pix                        --Type of image to import and export
-   
-    type TileFreqs = Set (Int, Rational)            --Set of tile indexes with their relative rarity
-    type CoOrd = (Int, Int)                         --Simple cartesian integer coordinates
-    type Wave = Map CoOrd TileFreqs                 --Un or partially collapsed wavefunction containing a grid of possible tile indexes
-    type Grid = Map CoOrd Int                  --Fully collapsed wavefunction containing a grid of tile indexes
-    type Neighbor = (CoOrd,CoOrd)                   --Coordinates of a neighboring tile and its relative direction
-    type EntropyHeap = MinHeap (Rational, CoOrd)    --Heap listing partially collapsed cells by their relative entropy
-    type EnabledTiles = Map (Int, CoOrd) (Set Int)  --Map of tiles and a direction onto what tiles are valid for that space
-
-    type Transform = TileImg -> TileImg             --Transformations for enriching input tile samples
-
-    defaultTilePixel = PixelRGB8 255 0 127
-
 
 --Simple functions for grid-based processes
 
@@ -32,8 +17,23 @@ module DemiGen.Types where
     getGrid x y = concat [getGrid' x row| row <- [0..y]]
     getGrid' x row = [(col,row) | col <- [0..x]]
 
---Options for enriching input tile data
+--Types and globals for TileGen
+    type Pix = PixelRGB8
+    type TileImg = Image Pix                        --Type of image to import and export
 
+    type TileFreqs = Set (Int, Rational)            --Set of tile indexes with their relative rarity
+    type CoOrd = (Int, Int)                         --Simple cartesian integer coordinates
+    type Wave = Map CoOrd TileFreqs                 --Un or partially collapsed wavefunction containing a grid of possible tile indexes
+    type Grid = Map CoOrd Int                  --Fully collapsed wavefunction containing a grid of tile indexes
+    type Neighbor = (CoOrd,CoOrd)                   --Coordinates of a neighboring tile and its relative direction
+    type EntropyHeap = MinHeap (Rational, CoOrd)    --Heap listing partially collapsed cells by their relative entropy
+    type AdjRules = Map (Int, CoOrd) (Set Int)  --Map of tiles and a direction onto what tiles are valid for that space
+
+    type Transform = TileImg -> TileImg             --Transformations for enriching input tile samples
+
+    defaultTilePixel = PixelRGB8 255 0 127
+
+    --Options for enriching input tile data
     noTransform :: Transform
     noTransform img = img
 
@@ -67,3 +67,23 @@ module DemiGen.Types where
 
     repeatPattern :: Transform
     repeatPattern p = below [beside [p, p], beside [p, p]]
+
+--types and globals for TreeGen
+    --Think of a room as a node in a tree, where doors are connected nodes.
+    data Room = Room
+        { tiles :: Set CoOrd
+        , doors :: [(CoOrd, Connection Room)]
+        } deriving (Show)
+
+    data Connection a = Blocked | Open | To a deriving (Show)
+
+    data Cell = Empty | Occupied | Conn
+        deriving (Show, Eq)
+
+    type Dungeon = Map CoOrd Cell
+
+    doorPixel :: PixelRGB8
+    doorPixel = PixelRGB8 255 0 0
+
+    tilePixel :: PixelRGB8
+    tilePixel = PixelRGB8 0 0 0
