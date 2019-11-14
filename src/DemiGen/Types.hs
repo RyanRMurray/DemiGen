@@ -77,6 +77,11 @@ module DemiGen.Types where
 
     data Connection a = Blocked | Open | To a deriving (Show)
 
+    instance Eq (Connection a) where
+        (==) Blocked Blocked = True
+        (==) Open Open       = True
+        (==) _ _             = False
+
     data Cell = Empty | Occupied | Conn
         deriving (Show, Eq)
 

@@ -35,10 +35,11 @@ module DemiGen.TreeGen where
         ]
 
     allRooms :: IO [Room]
-    allRooms =
-        L.map getRoomData <$> L.map convertRGB8 <$> rights <$> ios
-        where
-            ios = mapM (\n-> readPng $ "assets/rooms/"++n++".png") roomNames
+    allRooms = do
+            inputs   <-  mapM (\n-> readPng $ "assets/rooms/"++n++".png") roomNames
+            let rdata = map getRoomData $ L.map convertRGB8 $ rights $ inputs
+                x     = [rotateRoom room rot | room <- rdata, rot <- [0..3]]
+            return x
 
     getTargetPixels :: TileImg -> PixelRGB8 -> [CoOrd]
     getTargetPixels input px = filter
@@ -72,11 +73,6 @@ module DemiGen.TreeGen where
     
     isFree d c = d M.! c /= Occupied
 
-    insertRoom :: Dungeon -> Room -> CoOrd -> Dungeon
-    insertRoom d r (ox, oy) =
-        L.foldl (\dg ((x,y),_) -> M.insert (x+ox,y+oy) Conn dg) d2 $ doors r
-        where
-            d2 = S.foldl (\dg (x,y) -> M.insert (x+ox,y+oy) Occupied dg) d (tiles r)
 
 --test outputs
 ---------------------------------------------------------------------------------------------------
