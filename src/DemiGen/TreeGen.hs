@@ -23,7 +23,7 @@ module DemiGen.TreeGen where
     getRoomData input = Room
         (S.fromList $ getTargetPixels input tilePixel) $
         zip doors
-            (replicate (length doors) Blocked)
+            (replicate (length doors) Open)
         where
             doors = (getTargetPixels input doorPixel)
 
@@ -72,6 +72,28 @@ module DemiGen.TreeGen where
         and [isFree d (x+ox,y+oy) | (x,y) <- S.toList ts]
     
     isFree d c = d M.! c /= Occupied
+
+
+
+    findValidDoor :: Dungeon -> Room -> Maybe CoOrd
+    findValidDoor d (Room _ doors) = findValidDoor' d doors
+    findValidDoor' d [] = Nothing
+    findValidDoor' d ((at,c):doors)
+        | c == Open = Just at
+        | otherwise = findValidDoor' d doors
+
+
+    attachRoomToDoor :: Dungeon -> Room -> CoOrd -> Maybe Dungeon
+    attachRoomToDoor d r target 
+        | noCollision d r target = Just $ insertRoom d r target
+        | otherwise              = Nothing
+
+    insertRoom :: Dungeon -> Room -> CoOrd -> Dungeon
+    insertRoom d r (ox, oy) =
+        L.foldl (\dg ((x,y),_) -> M.insert (x+ox,y+oy) Conn dg) d2 $ doors r
+        where
+            d2 = S.foldl (\dg (x,y) -> M.insert (x+ox,y+oy) Occupied dg) d (tiles r)
+
 
 
 --test outputs
