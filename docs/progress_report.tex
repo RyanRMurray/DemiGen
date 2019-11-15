@@ -2,6 +2,9 @@
 \usepackage{array, tabularx}
 \usepackage{cellspace}
 \usepackage{appendix}
+\usepackage{color, colortbl}
+\definecolor{green}{rgb}{0.3,0.9,0.3}
+\definecolor{orange}{rgb}{1,0.5,0.0}
 
 \begin{document}
 \thispagestyle{plain}
@@ -39,20 +42,22 @@ The main problem that this project aims to tackle is the difficulty in producing
 
 
 \section{Preliminary Research on Procedural Terrain Generation}
-Much of the research that has been done into producing randomly generated terrain has been focused on its application in the development of video games. Also present in the research is attempts to define the layouts of man-made structures by a set of rules that can be implemented by an algorithm. 
+Much of the research that has been done into producing randomly generated terrain has been focused on its application in the development of video games. Also present in the research is attempts to define the layouts of man-made structures by a set of rules that can be implemented by an algorithm. \\
+
+Of particular note is the implementation of terrain generation in the \textit{Roguelike} genre of video games. Many of these games draw inspiration from TTRPGs themselves, and as such try to emulate a subset of the common gameplay loops found in such games. Generally, they focus on avoiding or fighting various types of enemies to attain better equipment and resources to take on greater challenges for greater rewards. As such, much of the focus is on the interaction between players and enemies, and various ways of finding and using loot. Older roguelikes often made use of algorithms that'd generate either a series of rectangular rooms or irregularly shaped cave-like networks. Modern games often make use of pre-fabricated modular rooms that are connected together by some criteria (such as specification of a certain number of rooms, or the requirement of special encounter rooms).\\ 
 
 
 
-Of particular note is the implementation of terrain generation in the \textit{Roguelike} genre of video games. Many of these games draw inspiration from TTRPGs themselves, and as such try to emulate a subset of the common gameplay loops found in such games. Generally, they focus on avoiding or fighting various types of enemies to attain better equipment and resources to take on greater challenges for greater rewards. As such, much of the focus is on the interaction between players and enemies, and various ways of finding and using loot. Older roguelikes often made use of algorithms that'd generate either a series of rectangular rooms or irregularly shaped cave-like networks. Modern games often make use of pre-fabricated modular rooms that are connected together by some criteria (such as specification of a certain number of rooms, or the requirement of special encounter rooms). \linebreak
-While the former often resulted in inconsistent difficulty spikes due to a lack of loot or high concentration of enemies, the latter sacrifices the range of possible layouts of maps for more consistently balanced challenges. As a GM can fine-tune the challenge of an area on the fly, this project will consider more novel and open-ended terrain generation algorithms. As a result, the balance tradeoff in modern roguelikes is less useful. An implementation of such an algorithm would result in series of maps that reuse assets and as such may become stale and uninteresting for players.
+
+While the former often resulted in inconsistent difficulty spikes due to a lack of loot or high concentration of enemies, the latter sacrifices the range of possible layouts of maps for more consistently balanced challenges. As a GM can fine-tune the challenge of an area on the fly, this project will consider more novel and open-ended terrain generation algorithms. As a result, the balance tradeoff in modern roguelikes is less useful. An implementation of such an algorithm would result in series of maps that reuse assets and as such may become stale and uninteresting for players.\\
 
 
 
-The open-source project "WaveFunctionCollapse" on Github presents a novel algorithm for producing arbitrarily large images from small input patterns.\cite{wfc-report} By deducing a set of rules from an image (sub-pattern frequency, adjacency of patterns), the algorithm can produce cohesive images that contain frequencies of pixel patterns comparable to those of the input. However, this approach has a number of implementations that make it less suited for generating entire maps, particularly structured locations such as buildings or dungeons. In particular; the user would be required to specify much of the map's layout to guaruntee a minimum number of meaningful locations, and even then the total number of discrete locations can be unpredictable.
+The open-source project "WaveFunctionCollapse" on Github presents a novel algorithm for producing arbitrarily large images from small input patterns.\cite{wfc-report} By deducing a set of rules from an image (sub-pattern frequency, adjacency of patterns), the algorithm can produce cohesive images that contain frequencies of pixel patterns comparable to those of the input. However, this approach has a number of implementations that make it less suited for generating entire maps, particularly structured locations such as buildings or dungeons. In particular; the user would be required to specify much of the map's layout to guaruntee a minimum number of meaningful locations, and even then the total number of discrete locations can be unpredictable.\\
 
 
 
-Valtchanov and Brown identified and demonstrated an algorithm for generating random dungeons using a genetic algorithm\cite{genetic}. By producing a set of trees in which nodes correspond to pre-fabricated rooms and edges the physical connections between them, then comparing them by a set of criteria, the algorithm produces dungeons that are well-connected and diverse. By adding extra criterias, it is possible to generate more interesting maps, such as ones in which discrete areas are connected by "special event" rooms. However, this runs into the aformentioned problem of prefabricated rooms becoming predictable and uninteresting.
+Valtchanov and Brown identified and demonstrated an algorithm for generating random dungeons using a genetic algorithm\cite{genetic}. By producing a set of trees in which nodes correspond to pre-fabricated rooms and edges the physical connections between them, then comparing them by a set of criteria, the algorithm produces dungeons that are well-connected and diverse. By adding extra criterias, it is possible to generate more interesting maps, such as ones in which discrete areas are connected by "special event" rooms. However, this runs into the aformentioned problem of prefabricated rooms becoming predictable and uninteresting.\\
 
 
 
@@ -110,7 +115,7 @@ The overall dungeon structure algorithm (currently dubbed 'TreeGen') is yet to b
 
 
 
-In theory, a number of RoomTrees will be randomly generated from a set of input Rooms and a given number of maximum nodes. These RoomTrees will then be scored by the following metrics; \begin{itemize}
+In the current plan, a number of RoomTrees will be randomly generated from a set of input Rooms and a given number of maximum nodes. These RoomTrees will then be scored by the following metrics; \begin{itemize}
     \item How small the longest Path is - this should result in more compact, naturally structured dungeons
     \item How many of the rooms can viably be placed - this is tested by attempting to generate a Dungeon from the RoomTree. Should a Room fail to be placed (either by its parent not having an available Door or a lack of space), it and its subtree of Rooms will not be counted towards this metric. 
     \item The presence of a specified number of specified rooms.
@@ -123,6 +128,76 @@ A benefit of the genetic algorithm approach described above is the ability to po
 \subsection{User Interface}
 No progress has been made on the basis of user interface yet. The options presented to the user are to be decided at a later date when the capabilities of the \textit{TreeGen} module have been better explored. 
 
+
+\subsection{Retrospective on original timetable}
+By the end of week 7, the project has currently reached the functionality described by the \textit{Weeks 4 \& 5} section of the original specification. Delays were expected, and as such a mostly finished product by the start of term 2 is still viable. Currently, there has been no formal test suite created for the TileGen module. The areas in which automated testing has been identified as viable include the maximum output size for a given input and execution time, and the effect of the complexity of the input image on the running time. As the effectiveness of an output can only be measured by human evaluation, any 'testing' of these outputs will be left for the outside feedback part of development. 
+
+
+
+Time permitting, ethical assessment for the outside feedback poll will be attained by the end of term 1, with the poll itself being published early term 2. 
+
+
+\section{Revised Timetable}
+To ensure a viable end product can be made, the development phase of the project has been simplified. As mentioned in section 2.4, it may be viable to develop the 'biome' and 'structure connection' systems simultaneously. 
+
+\large
+\textbf{Weeks 8, 9 \& 10}
+
+
+\begin{table}[h!]
+    \begin{tabularx}{\textwidth}{|Sl|X|}
+        \hline
+            ID  & Objective \\
+        \hline
+            1.1
+        &
+            Implement a first draft of the genetic tree algoritm
+        \\ \hline
+            1.2
+        &
+            Implement a system for calling the TileGen module for individual generated rooms
+        \\\hline
+            1.3
+        &
+            Formally define a handful of fitness criteria for the algorithm for different biomes
+        \\\hline
+            1.4
+        &
+            Test the capabilities of the algorithm, finding a maximum size/generation limit before the program takes an unfeasibly high amount of time to halt
+        \\\hline
+    \end{tabularx}
+\end{table}
+
+\pagebreak
+
+\large
+\textbf{Winter Break}
+
+\begin{table}[h!]
+    \begin{tabularx}{\textwidth}{|Sl|X|}
+        \hline
+            ID  & Objective \\
+        \hline
+            2.1
+        &
+            Development of content for the TileGen module
+        \\ \hline
+            2.2
+        &
+            Planning of a UI system to be completed
+        \\\hline
+            2.3
+        &
+            Implement a UI system allowing for user constraints
+        \\\hline
+            2.4
+        &
+            Perform extensive testing on (hopefully) finalised generation pipeline
+        \\\hline
+    \end{tabularx}
+\end{table}
+
+\textbf{Weeks 11 onwards should remain unchanged (see Appendix B)}
 
 \pagebreak
 
@@ -140,4 +215,253 @@ No progress has been made on the basis of user interface yet. The options presen
     \item Allow the user to impose constraints on the shape and content of the maps generated by the software
     \item Compare created software with freely available competing tools
 \end{itemize}
+
+\section{Specification Timeline}
+
+Green indicates completed sections, orange indicates sections that have been altered (see section 3).
+
+\large
+\textbf{Week 1 - Research}
+\begin{table}[h!]
+    \begin{tabularx}{\textwidth}{|Sl|X|}
+        \hline
+            ID  & Objective \\
+        \hline
+        \rowcolor{green}
+            1.1
+        &
+            Make extensive notes on the features provided by competing tools/game implementations
+        \\ \hline
+        \rowcolor{green}
+            1.2
+        &
+            Research procedural generation patterns in video games development, including popular patterns in the current industry
+        \\\hline
+        \rowcolor{green}
+            1.3
+        &
+            Experiment with implementation of procedural generation patterns
+        \\\hline
+        \rowcolor{green}
+            1.4
+        &
+            Decide upon the exact tools and libraries to be used in development  
+        \\\hline
+    \end{tabularx}
+\end{table}
+
+\large
+\textbf{Week 2 \& 3 - Substructure Generation}
+\begin{table}[h!]
+    \begin{tabularx}{\textwidth}{|Sl|X|}
+        \hline
+            ID  & Objective \\
+        \hline
+        \rowcolor{green}
+            2.1
+        &
+            Define data structures to store maps and intermediate data
+        \\ \hline
+        \rowcolor{green}
+            2.2
+        &
+            Make final decision on structure of overall map generation pipeline
+        \\\hline
+        \rowcolor{green}
+            2.3
+        &
+            Implement first prototype of substructure generation algorithm
+        \\\hline
+    \end{tabularx}
+\end{table}
+
+\large
+\textbf{Week 4 \& 5 - Biome Generation}
+\begin{table}[h!]
+    \begin{tabularx}{\textwidth}{|Sl|X|}
+        \hline
+            ID  & Objective \\
+        \hline
+            3.1
+        &
+            Define a set of example biomes
+        \\ \hline
+        \rowcolor{green}
+            3.2
+        &
+            Decide on an algorithm for biome generation
+        \\\hline
+            3.3
+        &
+            Implement first prototype of biome generation algorithm
+        \\\hline
+            3.4
+        &
+            Integrate with Substructure generation layer
+        \\\hline
+            3.5
+        &
+            Conduct extensive testing with consideration to edge cases
+        \\\hline
+    \end{tabularx}
+\end{table}
+
+   
+\large
+\textbf{Week 6 \& 7 - Substructure Connection}
+\begin{table}[h!]
+    \begin{tabularx}{\textwidth}{|Sl|X|}
+        \hline
+            ID  & Objective \\
+        \hline
+        \rowcolor{green}
+            4.1
+        &
+            Decide on an implementation of substructure connection
+        \\ \hline
+        \rowcolor{orange}
+            4.2
+        &
+            Implement substructure connection
+        \\\hline
+        \rowcolor{orange}
+            4.3
+        &
+            Assess data structure for implementing constraints on biomes
+        \\\hline
+            4.4
+        &
+            Conduct extensive testing and tweak based on results
+        \\\hline
+    \end{tabularx}
+\end{table}
+   
+\large
+\textbf{Weeks 8, 9 10 \& Winter Break - Implementation of Controls \& Content Creation}
+\begin{table}[h!]
+    \begin{tabularx}{\textwidth}{|Sl|X|}
+        \hline
+            ID  & Objective \\
+        \hline
+            5.1
+        &
+            Implement a rudimentary UI allowing for user constraints
+        \\ \hline
+            5.2
+        &
+            Generate a minimum of 3 example theme options
+        \\\hline
+            5.3
+        &
+            Perform extensive testing on (hopefully) finalised generation pipeline
+        \\\hline
+            5.4
+        &
+            Conduct testing on UI
+        \\\hline
+    \end{tabularx}
+\end{table}
+
+\large
+\textbf{Week 11 \& 12 - User Feedback}
+\begin{table}[h!]
+    \begin{tabularx}{\textwidth}{|Sl|X|}
+        \hline
+            ID  & Objective \\
+        \hline
+            6.1
+        &
+            Select a number of hand-crafted maps and recreate with whatever tileset DemiGen is generated from.
+        \\ \hline
+            6.2
+        &
+            Devise an online test to assess the effectiveness of DemiGen
+        \\\hline
+            6.3
+        &
+            Attain an acceptable number of responses to the aforementioned test
+        \\\hline
+            6.4
+        &
+            Collect feedback on UI elements
+        \\\hline
+    \end{tabularx}
+\end{table}
+
+\large
+\textbf{Weeks 13 \& 14 - Feedback analysis and Report Draft}
+\begin{table}[h!]
+    \begin{tabularx}{\textwidth}{|Sl|X|}
+        \hline
+            ID  & Objective \\
+        \hline
+            7.1
+        &
+            Analyse feedback and conclude on software's effectiveness
+        \\ \hline
+            7.2
+        &
+            Compare DemiGen's capabilities to those of its competitors
+        \\\hline
+            7.3
+        &
+            Outline final report
+        \\\hline
+            7.4
+        &
+            Draft first chapters of report
+        \\\hline
+    \end{tabularx}
+\end{table}
+
+\large
+\textbf{Weeks 15 \& 16 - Report Draft Continuation}
+
+\begin{table}[h!]
+    \begin{tabularx}{\textwidth}{|Sl|X|}
+        \hline
+            ID  & Objective \\
+        \hline
+            8.1
+        &
+            Draft rest of report
+        \\ \hline
+            8.2
+        &
+            Seek feedback on drafted chapters
+        \\\hline
+            8.3
+        &
+            Begin second draft based on feedback
+        \\\hline
+    \end{tabularx}
+\end{table}
+\pagebreak
+\large
+\textbf{Weeks 17\& 18 - Presentation Preparation}
+
+\begin{table}[h!]
+    \begin{tabularx}{\textwidth}{|Sl|X|}
+        \hline
+            ID  & Objective \\
+        \hline
+            8.1
+        &
+            Draft and finalise presentation
+        \\ \hline
+            8.2
+        &
+            Seek feedback on second draft of report
+        \\\hline
+            8.3
+        &
+            Alter report based on feedback
+        \\\hline
+    \end{tabularx}
+\end{table}
+
+\large
+\textbf{Weeks 19 \& Beyond}
+The remaining time will be used to ensure the report is to a good standard. Ideally, the final draft will be complete with a few weeks remaining before the deadline. With some last minute feedback, the report will be complete.
+
 \end{document}
