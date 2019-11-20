@@ -21,9 +21,7 @@ module DemiGen.TreeGen where
 
     getRoomData :: TileImg -> Room
     getRoomData input = Room
-        (S.fromList $ getTargetPixels input tilePixel) $
-        zip doors
-            (replicate (length doors) Open)
+        (S.fromList $ getTargetPixels input tilePixel) $ doors
         where
             doors = (getTargetPixels input doorPixel)
 
@@ -37,9 +35,7 @@ module DemiGen.TreeGen where
     allRooms :: IO [Room]
     allRooms = do
             inputs   <-  mapM (\n-> readPng $ "assets/rooms/"++n++".png") roomNames
-            let rdata = map getRoomData $ L.map convertRGB8 $ rights $ inputs
-                x     = [rotateRoom room rot | room <- rdata, rot <- [0..3]]
-            return x
+            return $ map getRoomData $ L.map convertRGB8 $ rights $ inputs
 
     getTargetPixels :: TileImg -> PixelRGB8 -> [CoOrd]
     getTargetPixels input px = filter
@@ -60,40 +56,53 @@ module DemiGen.TreeGen where
 
     rotateRoom' r f = Room
         (S.map f $ tiles r) $
-        L.map (\(c,n) -> (f c,n)) $ doors r
+        L.map f $ doors r
     
     offsetRoom :: Room -> CoOrd -> Room
     offsetRoom r (ox,oy) = Room
             (S.map (\(x,y)->(x+ox,y+oy)) $ tiles r) $
-            L.map (\((x,y),n)->((x+ox,y+oy),n)) $ doors r
+            L.map (\(x,y)->(x+ox,y+oy)) $ doors r
 
     noCollision :: Dungeon -> Room -> CoOrd -> Bool
     noCollision d (Room ts _) (ox,oy) = 
         and [isFree d (x+ox,y+oy) | (x,y) <- S.toList ts]
     
-    isFree d c = d M.! c /= Occupied
-
-
+    isFree d c = or
+        [ M.notMember c d
+        , d M.! c /= Occupied
+        ]
 
     findValidDoor :: Dungeon -> Room -> Maybe CoOrd
     findValidDoor d (Room _ doors) = findValidDoor' d doors
     findValidDoor' d [] = Nothing
-    findValidDoor' d ((at,c):doors)
-        | c == Open = Just at
-        | otherwise = findValidDoor' d doors
+    findValidDoor' d (at:doors)
+        | d M.! at /= Occupied = Just at
+        | otherwise            = findValidDoor' d doors
 
-
-    attachRoomToDoor :: Dungeon -> Room -> CoOrd -> Maybe Dungeon
-    attachRoomToDoor d r target 
-        | noCollision d r target = Just $ insertRoom d r target
-        | otherwise              = Nothing
+    attachRoomToDoor :: Dungeon -> Room -> CoOrd -> [CoOrd] -> Maybe (Dungeon, Room)
+    attachRoomToDoor _ _ _ [] = Nothing
+    attachRoomToDoor d r target ((x,y):vs) 
+        | noCollision d r target = Just $ (insertRoom d off (0,0), off)
+        | otherwise              = attachRoomToDoor d r target vs
+      where
+        off = offsetRoom r (-x,-y)
 
     insertRoom :: Dungeon -> Room -> CoOrd -> Dungeon
     insertRoom d r (ox, oy) =
-        L.foldl (\dg ((x,y),_) -> M.insert (x+ox,y+oy) Conn dg) d2 $ doors r
+        L.foldl (\dg (x,y) -> M.insert (x+ox,y+oy) Conn dg) d2 $ doors r
         where
             d2 = S.foldl (\dg (x,y) -> M.insert (x+ox,y+oy) Occupied dg) d (tiles r)
 
+
+    insertChildRoom :: Dungeon -> Room -> Room -> Maybe (Dungeon, Room)
+    insertChildRoom d parent child = do
+        target <- findValidDoor d parent
+        let rotations = [rotateRoom child rot | rot <- [0..3]]
+            offsets = L.map (\r -> offsetRoom r target) rotations
+        result <- msum $ L.map (\r -> attachRoomToDoor d r target (doors r)) offsets
+        Just result
+
+        
 
 
 --test outputs
