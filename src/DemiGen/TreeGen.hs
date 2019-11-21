@@ -21,9 +21,12 @@ module DemiGen.TreeGen where
 
     getRoomData :: TileImg -> Room
     getRoomData input = Room
-        (S.fromList $ getTargetPixels input tilePixel) $ doors
+        (S.fromList $ getTargetPixels input tilePixel) $ 
+        zip 
+            doors
+            (replicate (length doors) Open)
         where
-            doors = (getTargetPixels input doorPixel)
+            doors = getTargetPixels input doorPixel
 
     roomNames :: [String]
     roomNames =
@@ -56,12 +59,14 @@ module DemiGen.TreeGen where
 
     rotateRoom' r f = Room
         (S.map f $ tiles r) $
-        L.map f $ doors r
+        L.map 
+            (\(coord, c) -> (f coord, c)) 
+            $ doors r
     
     offsetRoom :: Room -> CoOrd -> Room
     offsetRoom r (ox,oy) = Room
             (S.map (\(x,y)->(x+ox,y+oy)) $ tiles r) $
-            L.map (\(x,y)->(x+ox,y+oy)) $ doors r
+            L.map (\((x,y),c)->((x+ox,y+oy),c)) $ doors r
 
     noCollision :: Dungeon -> Room -> CoOrd -> Bool
     noCollision d (Room ts _) (ox,oy) = 
@@ -73,44 +78,44 @@ module DemiGen.TreeGen where
         ]
 
     findValidDoor :: Dungeon -> Room -> Maybe CoOrd
-    findValidDoor d (Room _ doors) = findValidDoor' d doors
-    findValidDoor' d [] = Nothing
-    findValidDoor' d (at:doors)
-        | d M.! at /= Occupied = Just at
-        | otherwise            = findValidDoor' d doors
-
-    attachRoomToDoor :: Dungeon -> Room -> CoOrd -> [CoOrd] -> Maybe (Dungeon, Room)
-    attachRoomToDoor _ _ _ [] = Nothing
-    attachRoomToDoor d r target ((x,y):vs) 
-        | noCollision d r target = Just $ (insertRoom d off (0,0), off)
-        | otherwise              = attachRoomToDoor d r target vs
+    findValidDoor d (Room _ doors)
+        | length valid /= 0 = Just $ fst $ head valid
+        | otherwise         = Nothing
       where
-        off = offsetRoom r (-x,-y)
-
+        valid = L.filter (\d -> (snd d) == Open) doors
+        
     insertRoom :: Dungeon -> Room -> CoOrd -> Dungeon
     insertRoom d r (ox, oy) =
-        L.foldl (\dg (x,y) -> M.insert (x+ox,y+oy) Conn dg) d2 $ doors r
+        L.foldl (\dg (x,y) -> M.insert (x+ox,y+oy) Conn dg) d2 $ L.map fst $ doors r
         where
             d2 = S.foldl (\dg (x,y) -> M.insert (x+ox,y+oy) Occupied dg) d (tiles r)
 
-
-    insertChildRoom :: Dungeon -> Room -> Room -> Maybe (Dungeon, Room)
+    insertChildRoom :: Dungeon -> Room -> Room -> Maybe (Dungeon, Room, Room)
     insertChildRoom d parent child = do
         target <- findValidDoor d parent
         let rotations = [rotateRoom child rot | rot <- [0..3]]
-            offsets = L.map (\r -> offsetRoom r target) rotations
-        result <- msum $ L.map (\r -> attachRoomToDoor d r target (doors r)) offsets
-        Just result
+            dooroffsets = [offsetRoom (setConn r parent (x,y)) (-x,-y) | r <- rotations, ((x,y),_) <- doors r]
+            offsets = [offsetRoom r target | r <- dooroffsets]
+        (newD, newChild) <- msum [attemptAttach d r | r <- offsets]        
+        Just (newD, (setConn parent newChild target), newChild)
 
-        
+    attemptAttach :: Dungeon -> Room -> Maybe (Dungeon, Room)
+    attemptAttach d r 
+        | noCollision d r (0,0) = Just $ (insertRoom d r (0,0), r)
+        | otherwise             = Nothing
 
+
+    setConn :: Room -> Room -> CoOrd -> Room
+    setConn (Room ts doors) connected door =
+        Room ts $ (door, To connected) : [(c, t) | (c,t) <- doors, c /= door]
+          
 
 --test outputs
 ---------------------------------------------------------------------------------------------------
     
     printRawDungeon :: Dungeon -> Int -> Int -> IO ()
     printRawDungeon d x y = writePng "dungeontestout.png" $
-        generateImage (\x y -> printDungeonPixel $ d M.! (x,y)) x y
+        generateImage (\x y -> printDungeonPixel $ M.findWithDefault Empty (x,y) d) x y
 
     printDungeonPixel :: Cell -> PixelRGB8
     printDungeonPixel Conn = doorPixel

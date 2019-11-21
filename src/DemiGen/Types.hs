@@ -72,7 +72,7 @@ module DemiGen.Types where
     --Think of a room as a node in a tree, where doors are connected nodes.
     data Room = Room
         { tiles :: Set CoOrd
-        , doors :: [CoOrd]
+        , doors :: [(CoOrd, Connection Room)]
         } deriving (Show)
 
     data Connection a = Blocked | Open | To a deriving (Show)
