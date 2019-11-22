@@ -110,6 +110,38 @@ module DemiGen.TreeGen where
         Room ts $ (door, To connected) : [(c, t) | (c,t) <- doors, c /= door]
           
 
+
+
+--random tree generators
+---------------------------------------------------------------------------------------------------
+
+    randomTree :: [Room] -> Int -> Int -> StdGen -> (DungeonTree, StdGen)
+    randomTree rooms 0 _ seed = Rand.runRand ( Rand.fromList [(Leaf r,1.0) | r <- rooms] ) seed
+    randomTree rooms budget maxChildren seed =
+        let (childNum, seed2) = randomR (1,maxChildren) seed:: (Int, StdGen)
+            (cBudgets, seed3) = distributeBudget (budget-1) childNum ([], seed2)
+            (children, seed4) = randomChildren rooms cBudgets maxChildren ([], seed3)
+            (pRoom, seed5)    = Rand.runRand ( Rand.fromList [(r,1.0)| r <- rooms] ) seed
+        in
+            (Node pRoom children, seed5)
+
+
+    distributeBudget :: Int -> Int -> ([Int], StdGen) -> ([Int], StdGen)
+    distributeBudget 0 _ result = result
+    distributeBudget budget 0 (res, seed) = (budget:res, seed)
+    distributeBudget budget recipients (distributed, seed) =
+        let (newDis, seed2) = randomR (0, budget) seed
+            remaining       = budget - newDis
+        in
+            distributeBudget remaining (recipients - 1) (newDis:distributed, seed2)
+
+    randomChildren :: [Room] -> [Int] -> Int -> ([DungeonTree], StdGen) -> ([DungeonTree], StdGen)
+    randomChildren _ [] _ result = result
+    randomChildren rooms (c:cs) maxChildren (res, seed) =
+        randomChildren rooms cs maxChildren (newC:res, seed2)
+      where
+        (newC, seed2) = randomTree rooms c maxChildren seed
+
 --test outputs
 ---------------------------------------------------------------------------------------------------
     

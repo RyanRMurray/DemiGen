@@ -87,6 +87,11 @@ module DemiGen.Types where
 
     type Dungeon = Map CoOrd Cell
 
+    data DungeonTree = Leaf Room
+                     | Node Room [DungeonTree]
+                     deriving (Show)
+
+
     doorPixel :: PixelRGB8
     doorPixel = PixelRGB8 255 0 0
 
