@@ -145,9 +145,30 @@ module DemiGen.TreeGen where
 --test outputs
 ---------------------------------------------------------------------------------------------------
     
-    printRawDungeon :: Dungeon -> Int -> Int -> IO ()
-    printRawDungeon d x y = writePng "dungeontestout.png" $
+    printBoundedRawDungeon :: Dungeon -> Int -> Int -> IO ()
+    printBoundedRawDungeon d x y = writePng "dungeonRawOut.png" $
         generateImage (\x y -> printDungeonPixel $ M.findWithDefault Empty (x,y) d) x y
+
+    printRawDungeon :: Dungeon -> IO ()
+    printRawDungeon d =
+        let (minx,miny,maxx,maxy)  = getBounds (M.keys d) (0,0,0,0)
+            newD                   = M.mapKeys (\(x,y) -> (x-minx,y-miny)) d
+        in
+            writePng "dungeonRawOut.png" $ 
+            generateImage 
+                (\x y -> printDungeonPixel $ M.findWithDefault Empty (x,y) newD) 
+                (maxx-minx) (maxy-miny)
+
+    getBounds :: [CoOrd] -> (Int, Int, Int, Int) -> (Int, Int, Int, Int)
+    getBounds [] res = res
+    getBounds ((x,y):cs) (minx,miny,maxx,maxy) =
+        getBounds cs (nminx, nminy, nmaxx, nmaxy)
+      where
+        nminx = min x minx
+        nmaxx = max x maxx
+        nminy = min y miny
+        nmaxy = max y maxy
+
 
     printDungeonPixel :: Cell -> PixelRGB8
     printDungeonPixel Conn = doorPixel
