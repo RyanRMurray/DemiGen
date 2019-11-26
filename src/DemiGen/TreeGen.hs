@@ -93,9 +93,9 @@ module DemiGen.TreeGen where
     insertChildRoom :: Dungeon -> Room -> Room -> Maybe (Dungeon, Room, Room)
     insertChildRoom d parent child = do
         target <- findValidDoor d parent
-        let rotations = [rotateRoom child rot | rot <- [0..3]]
-            dooroffsets = [offsetRoom (setConn r parent (x,y)) (-x,-y) | r <- rotations, ((x,y),_) <- doors r]
-            offsets = [offsetRoom r target | r <- dooroffsets]
+        let rotations     = [rotateRoom child rot | rot <- [0..3]]
+            dooroffsets   = [offsetRoom (setConn r parent (x,y)) (-x,-y) | r <- rotations, ((x,y),_) <- doors r]
+            offsets       = [offsetRoom r target | r <- dooroffsets]
         (newD, newChild) <- msum [attemptAttach d r | r <- offsets]        
         Just (newD, (setConn parent newChild target), newChild)
 
@@ -104,15 +104,12 @@ module DemiGen.TreeGen where
         | noCollision d r (0,0) = Just $ (insertRoom d r (0,0), r)
         | otherwise             = Nothing
 
-
     setConn :: Room -> Room -> CoOrd -> Room
     setConn (Room ts doors) connected door =
         Room ts $ (door, To connected) : [(c, t) | (c,t) <- doors, c /= door]
           
 
-
-
---random tree generators
+--random tree generator
 ---------------------------------------------------------------------------------------------------
 
     randomTree :: [Room] -> Int -> Int -> StdGen -> (DungeonTree, StdGen)
@@ -142,6 +139,37 @@ module DemiGen.TreeGen where
       where
         (newC, seed2) = randomTree rooms c maxChildren seed
 
+--tree to dungeon functions
+---------------------------------------------------------------------------------------------------
+
+    treeToDungeon :: DungeonTree -> Dungeon
+    treeToDungeon (Leaf r) = insertRoom 
+        (generateDungeonGrid 0 0)
+        r (0,0)
+
+    treeToDungeon (Node r cs) = 
+        generateSubTree 
+            (insertRoom (generateDungeonGrid 0 0) r (0,0)) 
+            r cs []
+
+    
+    generateSubTree :: Dungeon -> Room -> [DungeonTree] -> [DungeonTree] -> Dungeon
+    generateSubTree d parent ((Leaf r):cs) next = 
+        case insertChildRoom d parent r of
+            Nothing -> generateSubTree d parent cs next
+            Just (d2, p2, c2) -> generateSubTree d2 p2 cs next
+
+    generateSubTree d parent ((Node r subCs):cs) next =
+        case insertChildRoom d parent r of
+            Nothing -> generateSubTree d parent cs next
+            Just (d2, p2, c2) -> generateSubTree d2 p2 cs (next ++ [Node c2 subCs])
+
+    generateSubTree d _ [] ((Node c cs):ns) = generateSubTree d c cs ns
+
+    generateSubTree d _ [] [] = d
+
+
+
 --test outputs
 ---------------------------------------------------------------------------------------------------
     
@@ -152,12 +180,12 @@ module DemiGen.TreeGen where
     printRawDungeon :: Dungeon -> IO ()
     printRawDungeon d =
         let (minx,miny,maxx,maxy)  = getBounds (M.keys d) (0,0,0,0)
-            newD                   = M.mapKeys (\(x,y) -> (x-minx,y-miny)) d
+            newD                   = M.mapKeys (\(x,y) -> (x + abs minx,y + abs miny)) d
         in
             writePng "dungeonRawOut.png" $ 
             generateImage 
-                (\x y -> printDungeonPixel $ M.findWithDefault Empty (x,y) newD) 
-                (maxx-minx) (maxy-miny)
+                (\x y -> printDungeonPixel $ M.findWithDefault Empty (x+minx,y+miny) newD) 
+                (maxx + abs minx + 50) (maxy + abs miny + 10)
 
     getBounds :: [CoOrd] -> (Int, Int, Int, Int) -> (Int, Int, Int, Int)
     getBounds [] res = res
