@@ -84,11 +84,11 @@ module DemiGen.TreeGen where
       where
         valid = L.filter (\d -> (snd d) == Open) doors
         
-    insertRoom :: Dungeon -> Room -> CoOrd -> Dungeon
-    insertRoom d r (ox, oy) =
-        L.foldl (\dg (x,y) -> M.insert (x+ox,y+oy) Conn dg) d2 $ L.map fst $ doors r
+    insertRoom :: Dungeon -> Room -> Dungeon
+    insertRoom d r =
+        L.foldl (\dg c -> M.insert c Conn dg) d2 $ L.map fst $ doors r
         where
-            d2 = S.foldl (\dg (x,y) -> M.insert (x+ox,y+oy) Occupied dg) d (tiles r)
+            d2 = S.foldl (\dg c -> M.insert c Occupied dg) d (tiles r)
 
     insertChildRoom :: Dungeon -> Room -> Room -> Maybe (Dungeon, Room, Room)
     insertChildRoom d parent child = do
@@ -101,7 +101,7 @@ module DemiGen.TreeGen where
 
     attemptAttach :: Dungeon -> Room -> Maybe (Dungeon, Room)
     attemptAttach d r 
-        | noCollision d r (0,0) = Just $ (insertRoom d r (0,0), r)
+        | noCollision d r (0,0) = Just $ (insertRoom d r, r)
         | otherwise             = Nothing
 
     setConn :: Room -> Room -> CoOrd -> Room
@@ -142,32 +142,39 @@ module DemiGen.TreeGen where
 --tree to dungeon functions
 ---------------------------------------------------------------------------------------------------
 
-    treeToDungeon :: DungeonTree -> Dungeon
-    treeToDungeon (Leaf r) = insertRoom 
-        (generateDungeonGrid 0 0)
-        r (0,0)
+    treeToGenome :: DungeonTree -> [Room]
+    treeToGenome (Leaf (Room ts _)) = [Room ts []]
 
-    treeToDungeon (Node r cs) = 
-        generateSubTree 
-            (insertRoom (generateDungeonGrid 0 0) r (0,0)) 
-            r cs []
+    treeToGenome (Node r cs) = purgeDoors $
+        makeGenome 
+            (insertRoom (generateDungeonGrid 0 0) r) 
+            r cs [] []
 
     
-    generateSubTree :: Dungeon -> Room -> [DungeonTree] -> [DungeonTree] -> Dungeon
-    generateSubTree d parent ((Leaf r):cs) next = 
+    makeGenome :: Dungeon -> Room -> [DungeonTree] -> [DungeonTree] -> [Room] -> [Room]
+    makeGenome d parent ((Leaf r):cs) next rooms = 
         case insertChildRoom d parent r of
-            Nothing -> generateSubTree d parent cs next
-            Just (d2, p2, c2) -> generateSubTree d2 p2 cs next
+            Nothing -> makeGenome d parent cs next rooms
+            Just (d2, p2, c2) -> makeGenome d2 p2 cs next (c2:rooms)
 
-    generateSubTree d parent ((Node r subCs):cs) next =
+    makeGenome d parent ((Node r subCs):cs) next rooms =
         case insertChildRoom d parent r of
-            Nothing -> generateSubTree d parent cs next
-            Just (d2, p2, c2) -> generateSubTree d2 p2 cs (next ++ [Node c2 subCs])
+            Nothing -> makeGenome d parent cs next rooms
+            Just (d2, p2, c2) -> makeGenome d2 p2 cs (next ++ [Node c2 subCs]) rooms
 
-    generateSubTree d _ [] ((Node c cs):ns) = generateSubTree d c cs ns
+    makeGenome d parent [] ((Node c cs):ns) rooms = makeGenome d c cs ns (parent:rooms)
 
-    generateSubTree d _ [] [] = d
+    makeGenome _ _ [] [] rooms = rooms
 
+    purgeDoors :: [Room] -> [Room]
+    purgeDoors [] = []
+    purgeDoors ((Room ts ds):rs) = 
+        (Room ts [d | d <- ds, snd d /= Open]) : purgeDoors rs
+
+
+    genotypeToDungeon :: [Room] -> Dungeon
+    genotypeToDungeon =
+        foldl insertRoom (generateDungeonGrid 0 0)
 
 
 --test outputs
@@ -185,7 +192,7 @@ module DemiGen.TreeGen where
             writePng "dungeonRawOut.png" $ 
             generateImage 
                 (\x y -> printDungeonPixel $ M.findWithDefault Empty (x+minx,y+miny) newD) 
-                (maxx + abs minx + 50) (maxy + abs miny + 10)
+                (maxx + abs minx + 50) (maxy + abs miny + 50)
 
     getBounds :: [CoOrd] -> (Int, Int, Int, Int) -> (Int, Int, Int, Int)
     getBounds [] res = res

@@ -26,19 +26,19 @@
 
 \section{Project Overview}
 
-With the continued success of Tabletop Roleplaying Games (TTRPGs) comes the increasing desire to streamline the more complex minutae that is required for these games to be played. One component that is required for most games and styles of play is a defined 'map' of the world the game takes place in. Maps in this case refers to physical locations in the game's setting, such as a building, town, dungeon, ect. \textit{Dungeons \& Dragons} for example makes much use of distance, cover and areas of effect that are best resolved using a concretely defined map. Considering the physical space one's character occupies and using terrain to one's advantage is often a satisfying experience. While there is a vast library of freely available pre-made maps online, it may be difficult for a Game Master (GM) to find one that perfectly meets their requirements. They may require one or more specific kinds of locations, or a certain number of encounters. Generally, the solution is for a GM to create their own worlds, which requires consideration of minute details such as the layout of each individual room in a map consisting of dozens of rooms. This can often be challenging for new GMs, who often resort to empty, flat rooms that are quick to design but does not allow for more tactical approaches to combat. 
+With the continued success of Tabletop Roleplaying Games (TTRPGs) comes the increasing desire to streamline the more complex minutae that is required for these games to be played. One component that is required for most games and styles of play is a defined 'map' of the world the game takes place in. Maps in this case refers to physical locations in the game's setting, such as a building, town, dungeon, ect. \textit{Dungeons \& Dragons} for example makes much use of distance, cover and areas of effect that are best resolved using a concretely defined map. Considering the physical space one's character occupies and using terrain to one's advantage is often a satisfying experience. While there is a vast library of freely available pre-made maps online, it is difficult for a Game Master (GM) to find one that perfectly meets their requirements. They may require one or more specific kinds of locations, or a certain number of encounters. Generally, the solution is for a GM to create their own worlds, which requires consideration of minute details such as the layout of each individual room in a map consisting of dozens of rooms. This can often be challenging for new GMs, who often resort to empty, flat rooms that are quick to design but do not allow for more tactical and engaging approaches to combat. 
 
 
 
-While there are a few free solutions available online for generating dungeon spaces, it was found that the dungeons they generated were often uninteresting, relying on either plain rectangular rooms connected by corridors, or predictably spaced entrance points that place a limit on the potential layouts of a space.
+While there are a few free solutions available online for generating dungeon spaces, it was found that the dungeons they generated were often uninteresting, relying on either plain rectangular rooms connected by corridors, or predictably spaced entrance points that place a limit on the potential layouts of a structure.
 
 
 
-The aim of this project is to produce software that would enable beginner GMs to generate maps that suit their needs. It consists of a few layers that each generate a certain element of the map; the order rooms are connected in, what rooms appear, and what appears in those rooms. A more thorough specification can be found in Appendix A.
+The aim of this project is to produce software that would enable beginner GMs to generate maps that suit their needs. It consists of a few layers that each generate a certain element of the map; the order rooms are connected in, what rooms appear, and what appears in those rooms. A more thorough specification can be found in Section B of Appendix A.
 
 
 
-The main problem that this project aims to tackle is the difficulty in producing 'interesting' terrain through procedural generation. The freely available solutions online produce predictably structured levels as they make use of simple algorithms. By investigating more novel forms of procedural generation, this project may produce higher quality maps. 
+The main problem that this project aims to tackle is the difficulty in producing 'interesting' terrain through procedural generation. The freely available solutions online produce predictably structured levels as they make use of simple algorithms. By investigating more novel forms of procedural generation, this project aims to produce higher quality maps. 
 
 
 \section{Preliminary Research on Procedural Terrain Generation}
@@ -53,23 +53,68 @@ While the former often resulted in inconsistent difficulty spikes due to a lack 
 
 
 
-The open-source project "WaveFunctionCollapse" on Github presents a novel algorithm for producing arbitrarily large images from small input patterns.\cite{wfc-report} By deducing a set of rules from an image (sub-pattern frequency, adjacency of patterns), the algorithm can produce cohesive images that contain frequencies of pixel patterns comparable to those of the input. However, this approach has a number of implementations that make it less suited for generating entire maps, particularly structured locations such as buildings or dungeons. In particular; the user would be required to specify much of the map's layout to guaruntee a minimum number of meaningful locations, and even then the total number of discrete locations can be unpredictable.\\
+The open-source project "WaveFunctionCollapse"\footnote{https://github.com/mxgmn/WaveFunctionCollapse/} presents a novel algorithm for producing arbitrarily large images from small input patterns \cite{wfc-report}. Wave Function Collapse is a model from quantum physics that frames the properties\footnote{i.e. location, momentum} of objects as a function mapping values to probabilities. When this property is measured (observed), this function "collapses" to a definite value. The exact nature of this phenomenon in physics is unimportant, but what is implemented in this project is the idea of treating an output as a "wave" of functions that are "collapsed" by observing a single point and then propagating out the consequences of the observations. These consequences are the result of restrictions being placed on what kind of points can be next to each other.
 
 
 
-Valtchanov and Brown identified and demonstrated an algorithm for generating random dungeons using a genetic algorithm\cite{genetic}. By producing a set of trees in which nodes correspond to pre-fabricated rooms and edges the physical connections between them, then comparing them by a set of criteria, the algorithm produces dungeons that are well-connected and diverse. By adding extra criterias, it is possible to generate more interesting maps, such as ones in which discrete areas are connected by "special event" rooms. However, this runs into the aformentioned problem of prefabricated rooms becoming predictable and uninteresting.\\
+By deducing a set of rules from an image (sub-pattern frequency, adjacency of patterns), the algorithm can produce cohesive images that contain frequencies of pixel patterns comparable to those of the input. 
 
 
 
-A novel way of producing randomly generated structures was explored by Koning and Eizenberg using Shape Grammars.\cite{koning1981language} Like Context-Free Grammars, Shape Grammars rely on a set of rules defining what permutations can follow a given starting point. But instead of producing strings, they generate structures in multidimensional space. x and y demonstrate both 2d and 3d implementations. However, the implementation of arbitary shape grammars remains an unsolved problem, and the reverse engineering of appplicable shape grammars for dungeon generation would in itself be a large undertaking.
+However, this approach has a number of limitations that make it less suited for generating entire maps, particularly structured locations such as buildings or dungeons. In particular; the user would be required to specify much of the map's layout to guaruntee a minimum number of meaningful locations, and even then the total number of discrete locations can be unpredictable.\\
+
+
+
+Valtchanov and Brown identified and demonstrated an algorithm for generating random dungeons using a genetic algorithm \cite{genetic}. By producing a set of trees in which nodes correspond to pre-fabricated rooms and edges the physical connections between them, then comparing them by a set of criteria, the algorithm produces dungeons that are well-connected and diverse. By adding extra criterias, it is possible to generate more interesting maps, such as ones in which discrete areas are connected by "special event" rooms. However, this runs into the aformentioned problem of prefabricated rooms becoming predictable and uninteresting.\\
+
+
+
+A novel way of producing randomly generated structures was explored by Koning and Eizenberg using Shape Grammars \cite{koning1981language}. Like Context-Free Grammars, Shape Grammars rely on a set of rules defining what permutations can follow a given starting point. But instead of producing strings, they generate structures in multidimensional space. x and y demonstrate both 2d and 3d implementations. 
+
+
 
 \section{Progress}
 
 \subsection{Research}
-A good deal of research was done in relation to both explored avenues of terrain generation, as well as a number of underlying methods that proved to be useful when developing the software in Haskell. Time permitting, more research should be done into what data structures would be most effective for the project. For example, particularly large bottlenecks are experienced in the \textit{TileGen} module of the software (see the \textit{TileGen} section below). While a number of systems have been developed produce results similar to those desired for this project, none of them exhibit any degree of user-friendliness. As such, the ease of use of this software has become a priority.
+The specified research was done in relation to both explored avenues of terrain generation, as well as a number of underlying methods that proved to be useful when developing the software in Haskell.\\
+
+
+
+A number of features were identified as necessary for a usable \textit{Dungeons \& Dragons} map:
+\begin{itemize}
+    \item Clear delineation of spaces 5 feet apart (either as a square or hexagon grid).
+    \item Difficult Terrain in which movement is halved under most circumstances.
+    \item Levels of cover that allow for greated defence against threats. In ascending order of defensive bonuses; half, three-quarters and full cover.
+    \item Traps resulting in damage if a victim does not mitigate it through some means.
+\end{itemize}
+Implementing a virtual simulation of such features (i.e. taking the paramaters of an attack in the specified space and resolving it) is beyond the scope of this project. All that will be required is that all outputs utilise a suitable amount of the above features where appropriate. Appropriate in this case referring to how "believeable" it would be for features to appear in a given area. For example; a fortified position may have much cover, organised to create choke points. Conversely, it would not be reasonable to expect life-threatening traps in a dining room.\\
+
+
+
+Of the explored avenues of content generation, the WaveFunctionCollapse and genetic algorithm methods proved to be the most promising. 
+
+
+
+The WFC method applies a great degree of randomness, but the inferred rules allow for natural patterns to form with no human intervention. This means that while some sacrifice is made in terms of overall quality, much is gained in terms of adaptability and breadth of useful outputs. 
+
+
+
+Similarly, the initial genomes for the genetic algorithm method are highly random, but the use of mutation, crossover and comparisons allows for convergence towards optimal patterns. As a lazily evaluated language, it is likely that an implementation in Haskell may be quite efficient, as the method described in Valtchanov and Brown's paper involved many instances of either throwing away large sub-trees, or swapping sub-trees between seperate structures \cite{genetic}.\\
+
+
+
+While the use of Shape Grammars appeared promising at first, a number of issues became apparent. Of the examples shown in the papers reviewed, all involved the construction of specific Grammars for the implementations proposed. A single type of house can have as many as 50 production rules, all of which were produced by hand after much study from existing examples. The implementation of arbitary shape grammars remains an unsolved problem, and the reverse engineering of appplicable shape grammars for dungeon generation would in itself be a large undertaking. As such, while this approach may be promising, it may not be feasible in the time allowed for this project.\\
+
+
+
+As a functional language that tries to be as "pure" as possible, Haskell does not allow for arbitrary calls to a random number generation without some extra thought and care. However, with the use of the \textit{Control.Random} and \textit{Monad.Random} packages, it is possible to make pseudo-random decisions throughout the software. As a consequence, a "random" output can be recreated from a seed created before the execution of the core software functions. The lack of side effects in well-written Haskell means that recieving the same output for a given seed every time can be guarunteed without extra effort.\\
+
+
+
+Time permitting, more research should be done into what data structures would be most effective for the project. For example, particularly large bottlenecks are experienced in the \textit{TileGen} module of the software (see the \textit{TileGen} section below). While a number of systems have been developed produce results similar to those desired for this project, none of them exhibit any degree of user-friendliness. As such, the ease of use of this software has become a priority.
 
 \subsection{TileGen}
-The in-room content generation module of \textit{DemiGen} has reached functional completion. By implementing the Overlapping model described in both the WaveFunctionCollapse\cite{wfc-report} repository and an in-depth explaination of its principles\cite{wfc-article}, the terrain of a room (the content most immediately relevant to combat strategy) can be generated by a small input pattern.
+The in-room content generation module of \textit{DemiGen} has reached functional completion. By implementing the Overlapping model described in both the WaveFunctionCollapse\cite{wfc-report} repository and an in-depth explaination of its principles \cite{wfc-article}, the terrain of a room (the content most immediately relevant to combat strategy) can be generated by a small input pattern.
 
 
 
@@ -130,7 +175,8 @@ No progress has been made on the basis of user interface yet. The options presen
 
 
 \subsection{Retrospective on original timetable}
-By the end of week 7, the project has currently reached the functionality described by the \textit{Weeks 4 \& 5} section of the original specification. Delays were expected, and as such a mostly finished product by the start of term 2 is still viable. Currently, there has been no formal test suite created for the TileGen module. The areas in which automated testing has been identified as viable include the maximum output size for a given input and execution time, and the effect of the complexity of the input image on the running time. As the effectiveness of an output can only be measured by human evaluation, any 'testing' of these outputs will be left for the outside feedback part of development. 
+By the end of week 7, the project has currently reached the functionality described by the \textit{Weeks 4 \& 5} section of the original specification. Delays were expected, and as such a mostly finished product by the start of term 2 is still viable. Currently, there has been no formal test suite created for the TileGen module. The areas in which automated testing has been identified as viable include the maximum output size for a given input and execution time, and the effect of the complexity of the input image on the running time. As the effectiveness of an output can only be measured by human evaluation, any 'testing' of these outputs will be left for the outside feedback part of development.
+
 
 
 
@@ -197,18 +243,36 @@ To ensure a viable end product can be made, the development phase of the project
     \end{tabularx}
 \end{table}
 
-\textbf{Weeks 11 onwards should remain unchanged (see Appendix B)}
-
-\pagebreak
-
-\bibliographystyle{abbrv}
-\bibliography{progress_report}
-
+\textbf{Weeks 11 onwards should remain unchanged (see Appendix B)}4
 \pagebreak
 
 \appendix
-\section{Project Specification}
 
+
+\textbf{Appendix A- Project Specification}
+
+\section{Problem Statement}
+With the advent of popular livestream shows such as \textit{Critical Role} and \textit{The Adventure Zone}, Dungeons and Dragons and its derivatives are experiencing a surge in popularity.
+An element of the game that has proven daunting to new groups is the generation of structures and locations (hereby referred to as "levels") for use in games. 
+
+
+
+Tabletop Roleplaying Games (TTRPGs) such as Dungeons \& Dragons are often defined by three core elements; exploration, interaction, and strategy. All of these elements require the Game Master (GM) to create, describe, and narrate the events of a physical world in which these elements can take place.
+While its acceptable to loosely define a location as a number of rooms/substructures of vague sizing\footnote{an exercise referred to as "theatre of the mind"}, many find it preferable to specifically define the dimensions and contents of locations instead.
+However, creating more intricate and interesting locations increases the workload on the GM, who is already also responsible for creating and controlling all non-player characters and the rest of the game world.
+This workload is generally not shared with the players, as many players find it preferable to play content they are not familiar with and can be surprised by. 
+Aggravating this issue further, TTRPGs allow players a large degree of choice, meaning a GM cannot always predict where a party goes, nor what locations they choose to explore in detail.
+
+This project aims to lessen the workload imposed on a GM without spoiling future developments for future players, and allowing for improvised locations that are both extensive and interesting. 
+It aims to do so by providing software that randomly generates quality maps\footnote{A "quality" map is defined in section 2.1.1.} of locations to explore via the 5th edition of the \textit{Dungeons \& Dragons} ruleset.
+
+As \textit{Dungeons \& Dragons} has been popular in online spaces for decades, there exist a number of tools that try to fill this niche, and some video games that attempt to capture the experience of a classic dungeon crawl. However, the most popular examples have flaws that prevent them from being on par with user-generated content.
+Donjon's Dungeon Generator implementation\footnote{https://donjon.bin.sh/fantasy/dungeon/} generates a series of rectangular rooms connected by uniform corridors. The only way in which themes are expressed in the architecture is the outer boundary within which those rooms are generated being marginally different. The rooms themselves are indistinct and uninteresting. No effort has been made to define any interesting progression blockers.
+\textit{Rogue}\footnote{https://britzl.github.io/roguearchive/} was an innovative cornerstone for procedurally generated dungeon crawlers, but neither it nor its derivatives necessarily translate well to good map generators for Tabletop Games. Similarly to Donjon, the rooms can best be described as rectangles connected by uniform corridors. However, it is notable for its use of constraints to create a minimum progression path.
+Dizzy Dragon's implementation\footnote{http://www.dizzydragon.net/adventuregenerator/gen} results in the most dynamic substructures. Maps are layed out in uniformly sized grid squares, each of which has at most two regularly spaced connections to each neighbour. While this implementation allows for arbitrarily large spaces, it also means that levels become predictable. Furthermore, while grid cells have their own theme, these themes appear to be placed arbitrarily, and as such the overall map is a mess of different shapes with no cohesive structure. As such, a user cannot specify a progression path for the map to create.
+
+\section{Objectives}
+\subsection{Functional Objectives}
 \begin{itemize}
     \item Create software that produces randomly generated quality maps of locations that can be used in \textit{Dungeons \& Dragons 5th Edition}
     \item Implement themes, specifying constraints and rules that generate maps that are identifiable as matching that theme
@@ -216,33 +280,106 @@ To ensure a viable end product can be made, the development phase of the project
     \item Compare created software with freely available competing tools
 \end{itemize}
 
-\section{Specification Timeline}
+\subsubsection{Generating Maps for 5e}
+As the description of space in most TTRPGs can be left vague, the prerequisites for a map to be usable in 5e are very simple. At a minimum, a map in 5e clarifies the distance between characters, and indicates features such as walls or doors. A map can be anything from a vague diagram representing distances between creatures to fully realised locations, with elaborate traps, secret passages and varied terrain that may impact combat strategies. This project aims to provide software that generates maps on the more intricate end of the scale, as a number of free tools already provide generation of sparser, simpler locations (see section 2.1.4). 
+For 5e, this generally means the inclusion of a number of standardised features including traps, secret entrances, and differing degrees of strategic cover. 
+The first two elements are aspects of the exploration part of 5e, which generally follows the philosophy of punishing players that do not tread carefully, and rewards players that invest resources and time into improving their character's skills related to discovery and intuition. The use of strategic cover allows combat encounters to be more varied, making a fight more challenging if the enemy is better fortified, and rewarding careful positioning.
 
-Green indicates completed sections, orange indicates sections that have been altered (see section 3).
+The map should also adhere to the conventions of good level design. As a minimum, a substantial critical path\footnote{Defined as the required actions that take a group from the start of the level to the "goal" of the level}, opportunities for players to test their abilities, and a coherent structure that rewards intuitive play.
+Specifying a "substantial" critical path means trying to prevent situations in which the specified goal(s) of a level are trivial to reach; a GM that expects a dungeon to take at least a few hours to complete will not be pleased if the meaningful content in it is cleared within minutes.
+The range of skills a character in 5e can be made to possess is wide; from varying forms of combat to investigation to languages to craftsmanship. While expecting a level to allow all of these skills to come into play would be contrived, effort should still be made to ensure there is variation between all combat or all navigation. This allows players to build more diverse characters without worrying about not being an effective team member.
+A "coherent structure" in this case refers to a layout that is analogous enough to real world logic that the players can believe it can exist (suspension of disbelief).
+For example, if a level had a "treasure hoard" guarded by a dragon, it'd make sense that all the traps and guards would be between the hoard and the entrance, rather than being positioned to guard dead ends.
+
+The creation of randomly generated levels that are constrained by a set of rules is a well-explored topic in video games. Such as the genre of Rogue-likes (inspired by the 1980 PC Game \textit{Rogue}). Many of these games often make use of modular rooms designed by the developer, resulting in encounters that are generally more balanced at the cost of a decrease in variety. The patterns defined by these games are likely to be explored in the course of this project. Particularly, the pattern of having pre-defined important locations (entrances, goals, ect.) with the in-between being generated with some degree of randomisation.
+
+\subsubsection{Thematic Maps}
+The "Theme" of a map is defined as the set of conventions that map draws upon. Common themes in fantasy TTRPGs include dungeons, castles, and enchanted forests.
+These locations can have major variations, such as the presence of man-made structures in towns vs. the natural landscape of a forest. Or they can have very subtle structural differences, such as the barracks of a military base and the prison cells of a dungeon.
+
+By allowing for the creation of distinct thematic locations, the software would provide more freedom for a GM to more readily adapt the content to their needs. 
+
+\subsubsection{User Constraints}
+In addition to allowing for different themes, the software may grant the user a degree of control over the generated content in a number of key areas; number of encounters (both critical and optional), number of progression locks, and the physical locations of key points of interest. These additions may allow the software to serve not only as a tool for random ad-hoc content, but also as an assisting tool for GMs designing more extensive and personalised levels.
+
+\subsubsection{Comparison to Existing Tools}
+The popularity of TTRPGs means that a number of tools have been created to try and answer this need for randomly generated content. This project aims to implement a quality alternative to fill a number of niches. Additionally, it may prove useful to compare against randomly generated dungeons as implemented in video games. Particular points of comparison include:
+
+\begin{itemize}
+    \item donjon's Dungeon Generator
+    \item \textit{Rogue 1980}
+    \item Dizzy Dragon's Geomorphic Dungeon Adventure Generator
+\end{itemize}
+
+\subsection{Extensions}
+The aim of this project is to produce software that generates visually interesting and thematically identifiable grid-based maps. Many tools and games that aim to do the same thing also provide additional elements to enhance the atmosphere and character of their maps. The following elements could be added after the core functionality has been implemented;
+
+\begin{itemize}
+    \item Thematic descriptions of substructures, either the result of a markov chain or chained together from manually written sentence fragments
+    \item Enhancing the visuals of the map with appropriate colour and decoration
+    \item Thematically described and structured objectives and non-player characters
+\end{itemize}
+
+\section{Methodology}
+\subsection{Software Development}
+The proposed software will be broken down into a number of components, where the aim is to develop each component sequentially within a given time frame. While it is likely that some backtracking to debug and refactor earlier components will be required, the benefits of focusing on one component at a time, with a set of tests for each, will be valuable.
+
+As such, the most appropriate development cycle for this project would be the Iterative Model.
+
+The initial plan for this software's individual components is as such: a substructure generator, a system for specifying how substructures are generated, a system for connecting substructures, and User Interface elements allowing for easy generation of maps. These components are described in more detail throughout Section 4.
+
+\subsection{Testing \& Assessment}
+While the software will need to be automatically tested for functionality, there are a number of features that require outside assessment. 
+
+\subsubsection{Automated Evaluation}
+Some features of the software can be assessed objectively; such as sufficient handling of errors, prevention of constraint-breaking results and adherence to good coding practices. Requiring a sufficient pass rate for a test suite before software is considered finished is referred to as test-driven development.
+For each component, a suite of tests shall be constructed, which the software will have to pass before development of that component can be considered minimally complete. This series of tests is to be decided and created as one of the first steps of a component's development cycle. 
+
+\subsubsection{User Assessment}
+The most effective way to measure the effective implementation of ideas such as thematic adherence and structural coherency would be to assess their effectiveness using feedback with the target audience. Such feedback questions would test the software's ability to perform the following;
+\begin{itemize}
+    \item Produce maps that are visually identifiable as adhering to a certain theme
+    \item Produce substructures in which a diverse range of encounters can be designed
+    \item Produce maps of comparable quality to hand-crafted maps of comparable size
+\end{itemize}
+
+This feedback will be collected from anonymous volunteers from online Tabletop Game communities. They will be asked to perform some simple tasks; attempting to discern DemiGen maps from hand-created maps\footnote{Both of which shall be rendered using the same tileset}, and assigning a perceived theme to a number of DemiGen maps that have been generated using theme settings\footnote{Once again these maps will use a neutral tileset to eliminate guesswork based on factors beyond the software's generation.}. This will require seeking approval from the Department of Computer Science to ensure the tests are ethical.
+
+\subsubsection{Supervision}
+The student and supervisor will meet at a minimum of once per week for reflection on current progress. Feedback will also be provided on future development plans to alleviate issues associated with iterative development such as feature creep.
+
+\section{Timetable}
+The timeline for this project is for the most part arranged into two week blocks. The first of which will be a general research block, followed by a number of "development" blocks, and concluded with an overall evaluation as of to the effectiveness of the final software.
+The general structure of a development block is as such;
+\begin{itemize}
+    \item Refinement of the goals of that iteration
+    \item Development of a test suite for that iteration
+    \item Development of that iteration, towards meeting the minimum criteria
+    \item Evaluation and refinement of that iteration
+\end{itemize}
 
 \large
 \textbf{Week 1 - Research}
+\\
+Some areas of research include the tools DemiGen will be competing with, and procedural generation as implemented in the video game industry. Of particular note is a novel form of generating 2d spaces from constraints is an algorithm based on the quantum phenomena Wave Function Collapse\cite{wfc-report}.
+\\
 \begin{table}[h!]
     \begin{tabularx}{\textwidth}{|Sl|X|}
         \hline
             ID  & Objective \\
         \hline
-        \rowcolor{green}
             1.1
         &
-            Make extensive notes on the features provided by competing tools/game implementations
+            Make extensive notes on the features provided by competing tools/game implementations\cite{pcg-example}
         \\ \hline
-        \rowcolor{green}
             1.2
         &
-            Research procedural generation patterns in video games development, including popular patterns in the current industry
+            Research procedural generation patterns in video games development, including popular patterns in the current industry\cite{pcg-survey}
         \\\hline
-        \rowcolor{green}
             1.3
         &
             Experiment with implementation of procedural generation patterns
         \\\hline
-        \rowcolor{green}
             1.4
         &
             Decide upon the exact tools and libraries to be used in development  
@@ -252,22 +389,22 @@ Green indicates completed sections, orange indicates sections that have been alt
 
 \large
 \textbf{Week 2 \& 3 - Substructure Generation}
+\\
+Preliminary investigation into methods of procedural generation have lead to the conclusion that likely best course of action would be to treat the generation of each substructure as a separate entity. For this reason, the first iteration of DemiGen will produce structures from a set of rules and a tileset. The idea is for these substructures to be seeded across a map, after which connections between them will be generated procedurally.
+\\
 \begin{table}[h!]
     \begin{tabularx}{\textwidth}{|Sl|X|}
         \hline
             ID  & Objective \\
         \hline
-        \rowcolor{green}
             2.1
         &
             Define data structures to store maps and intermediate data
         \\ \hline
-        \rowcolor{green}
             2.2
         &
             Make final decision on structure of overall map generation pipeline
         \\\hline
-        \rowcolor{green}
             2.3
         &
             Implement first prototype of substructure generation algorithm
@@ -277,6 +414,10 @@ Green indicates completed sections, orange indicates sections that have been alt
 
 \large
 \textbf{Week 4 \& 5 - Biome Generation}
+Substructures will be generated by a set of constraints based on the "biome" they occupy. Biomes are a pattern popular in procedural generation for video games. A biomes are regions of space between which the constraints dictating procedural generation differ. A prominent example would be their implementation in \textit{Minecraft}. For example, desert biomes are covered almost entirely in flat sandy planes, whereas forest biomes are characterised as having thick vegetation including trees and flowers.
+
+An example of biomes between which the rules for procedural generation should differ in DemiGen could be the dungeon cells of a fortress and its treasure vault.
+\\
 \begin{table}[h!]
     \begin{tabularx}{\textwidth}{|Sl|X|}
         \hline
@@ -286,7 +427,6 @@ Green indicates completed sections, orange indicates sections that have been alt
         &
             Define a set of example biomes
         \\ \hline
-        \rowcolor{green}
             3.2
         &
             Decide on an algorithm for biome generation
@@ -309,22 +449,22 @@ Green indicates completed sections, orange indicates sections that have been alt
    
 \large
 \textbf{Week 6 \& 7 - Substructure Connection}
+\\
+The final stage of the procedural generation pipeline is ensuring the generated substructures have a reasonable level of connectivity. This stage may also introduce the possibility of hidden paths, traps and dead ends.
+
 \begin{table}[h!]
     \begin{tabularx}{\textwidth}{|Sl|X|}
         \hline
             ID  & Objective \\
         \hline
-        \rowcolor{green}
             4.1
         &
             Decide on an implementation of substructure connection
         \\ \hline
-        \rowcolor{orange}
             4.2
         &
             Implement substructure connection
         \\\hline
-        \rowcolor{orange}
             4.3
         &
             Assess data structure for implementing constraints on biomes
@@ -338,6 +478,11 @@ Green indicates completed sections, orange indicates sections that have been alt
    
 \large
 \textbf{Weeks 8, 9 10 \& Winter Break - Implementation of Controls \& Content Creation}
+\\
+The final stage of the software development will be the implementation of a User Interface that allows for control over aspects of the generated map such as room placement, theme, and size.
+
+With the structures for defining rules for biomes, it should be possible to implement with reasonable speed a number of example map themes, such as dungeons, cave systems, ect.
+
 \begin{table}[h!]
     \begin{tabularx}{\textwidth}{|Sl|X|}
         \hline
@@ -364,6 +509,11 @@ Green indicates completed sections, orange indicates sections that have been alt
 
 \large
 \textbf{Week 11 \& 12 - User Feedback}
+\\
+With the aim of having a stable prototype by the start of second term, the effectiveness of DemiGen will be tested based on user feedback from a sample of the target audience. By reaching out to online TTRPG communities, anonymous users will be asked to identify the "theme" associated with a sample of generated DemiGen maps. They will also be asked to discern generated maps from hand-crafted maps. The effectiveness of DemiGen will be measured based on how easy it was to tell what a map is supposed to look like and how hard it was to discern pre-generated maps from hand-crafted ones.
+
+The UI element of DemiGen will be tested based on feedback from a number of university students, who will be asked to provide qualitative feedback on the ease of use and clarity of options.
+
 \begin{table}[h!]
     \begin{tabularx}{\textwidth}{|Sl|X|}
         \hline
@@ -390,6 +540,18 @@ Green indicates completed sections, orange indicates sections that have been alt
 
 \large
 \textbf{Weeks 13 \& 14 - Feedback analysis and Report Draft}
+\\
+With the collection of user feedback, the effectiveness of DemiGen can be gauged, allowing for conclusions about the overall project to be drawn. With development finished, this means that work can begin towards drafting the final report. This report will be broken down into chapters roughly correlating to the sections outlined in this timetable;
+\begin{itemize}
+    \item Preliminary Research
+    \item Substructure Generation
+    \item Biome Generation
+    \item Substructure Interconnection
+    \item Thematic Presets
+    \item Feedback \& Conclusion
+    \item Further Work
+\end{itemize}
+
 \begin{table}[h!]
     \begin{tabularx}{\textwidth}{|Sl|X|}
         \hline
@@ -416,6 +578,8 @@ Green indicates completed sections, orange indicates sections that have been alt
 
 \large
 \textbf{Weeks 15 \& 16 - Report Draft Continuation}
+\\
+With the presentation at the end of Term 2, it would be beneficial to have completed a draft of the report by this point.
 
 \begin{table}[h!]
     \begin{tabularx}{\textwidth}{|Sl|X|}
@@ -436,9 +600,10 @@ Green indicates completed sections, orange indicates sections that have been alt
         \\\hline
     \end{tabularx}
 \end{table}
-\pagebreak
+
 \large
 \textbf{Weeks 17\& 18 - Presentation Preparation}
+Time will be set aside for preparing the project presentation. This will be done late in the term and after the first draft to ensure ample analysis has been done allowing for an informative and effective overview of the project.
 
 \begin{table}[h!]
     \begin{tabularx}{\textwidth}{|Sl|X|}
@@ -463,5 +628,18 @@ Green indicates completed sections, orange indicates sections that have been alt
 \large
 \textbf{Weeks 19 \& Beyond}
 The remaining time will be used to ensure the report is to a good standard. Ideally, the final draft will be complete with a few weeks remaining before the deadline. With some last minute feedback, the report will be complete.
+
+\section{Resources}
+The plan is for this software to be written in Haskell. It should not require any specialised hardware, nor any software that is not freely available. While an amount of data collection shall occur, this will pertain only to comparisons between DemiGen generated content and freely available resources for tabletop games. As such there will be minimum need to consider legal questions such as issues of copyright and data privacy laws.
+
+As for project management, liaison with the supervisor will occur both in person and over Slack, progress will be tracked with a simple spreadsheet.
+Version control for the software will be handled with Git, with regular uploads to GitHub. Additionally, major versions will be backed up to external memory storage mediums. 
+
+The Bibliography section contains a number of texts that have been considered as starting points for the research for this project.
+
+\pagebreak
+\bibliographystyle{abbrv}
+\bibliography{progress_report}
+
 
 \end{document}
