@@ -120,7 +120,7 @@ module DemiGen.TreeGen where
             (children, seed4) = randomChildren rooms cBudgets maxChildren ([], seed3)
             (pRoom, seed5)    = Rand.runRand ( Rand.fromList [(r,1.0)| r <- rooms] ) seed
         in
-            (Node pRoom children, seed5)
+            (Node pRoom budget children, seed5)
 
 
     distributeBudget :: Int -> Int -> ([Int], StdGen) -> ([Int], StdGen)
@@ -139,13 +139,63 @@ module DemiGen.TreeGen where
       where
         (newC, seed2) = randomTree rooms c maxChildren seed
 
+--tree mutation functions
+---------------------------------------------------------------------------------------------------
+
+    crossover :: DungeonTree -> DungeonTree -> StdGen -> (DungeonTree, StdGen)
+    crossover donor recipient s =
+        applyToRandom f recipient s2
+      where
+        (new,s2) = getRandomSubTree donor s
+        f        = swapSubTree new
+
+    swapSubTree :: DungeonTree -> DungeonTree -> StdGen -> (DungeonTree, StdGen)
+    swapSubTree new host s = (new, s)
+
+    getRandomSubTree :: DungeonTree -> StdGen -> (DungeonTree, StdGen)
+    getRandomSubTree (Leaf r) s = ((Leaf r), s)
+    getRandomSubTree parent s 
+        | choice == -1 = (parent, s2)
+        | otherwise    = getRandomSubTree (children !! choice) s2
+      where
+        (Node _ _ children) = parent
+        choiceList =  (-1, 1.0) : [(i, getSize c) | (i,c) <- zip [0..length children] children]
+        (choice, s2)     = Rand.runRand (Rand.fromList choiceList) s
+
+    applyToRandom :: (DungeonTree -> StdGen -> (DungeonTree, StdGen)) -> DungeonTree -> StdGen -> (DungeonTree, StdGen)
+    applyToRandom f (Leaf r) s = f (Leaf r) s
+    applyToRandom f parent s 
+        | choice == -1 = f parent s2
+        | otherwise   = applyToRandom' f parent choice s2
+      where
+        (Node _ _ children) = parent
+        choiceList =  (-1, 1.0) : [(i, getSize c) | (i,c) <- zip [0..length children] children]
+        (choice, s2)     = Rand.runRand (Rand.fromList choiceList) s
+        
+    applyToRandom' f (Node r size children) choice s =
+        let (updatedChild, s2) = applyToRandom f (children !! choice) s
+            otherChildren      = dropN children choice
+        in
+            (Node r size (updatedChild:otherChildren), s2)
+
+    dropN :: [a] -> Int -> [a]
+    dropN [] _ = []
+    dropN (x:xs) n 
+     | n == 0    = xs
+     | otherwise = x : dropN xs (n-1) 
+
+        
+    getSize :: DungeonTree -> Rational
+    getSize (Leaf _) = 1
+    getSize (Node _ size _) = fromIntegral size
+
 --tree to dungeon functions
 ---------------------------------------------------------------------------------------------------
 
     treeToGenome :: DungeonTree -> [Room]
     treeToGenome (Leaf (Room ts _)) = [Room ts []]
 
-    treeToGenome (Node r cs) = purgeDoors $
+    treeToGenome (Node r _ cs) = purgeDoors $
         makeGenome 
             (insertRoom (generateDungeonGrid 0 0) r) 
             r cs [] []
@@ -157,12 +207,12 @@ module DemiGen.TreeGen where
             Nothing -> makeGenome d parent cs next rooms
             Just (d2, p2, c2) -> makeGenome d2 p2 cs next (c2:rooms)
 
-    makeGenome d parent ((Node r subCs):cs) next rooms =
+    makeGenome d parent ((Node r _ subCs):cs) next rooms =
         case insertChildRoom d parent r of
             Nothing -> makeGenome d parent cs next rooms
-            Just (d2, p2, c2) -> makeGenome d2 p2 cs (next ++ [Node c2 subCs]) rooms
+            Just (d2, p2, c2) -> makeGenome d2 p2 cs (next ++ [Node c2 0 subCs]) rooms
 
-    makeGenome d parent [] ((Node c cs):ns) rooms = makeGenome d c cs ns (parent:rooms)
+    makeGenome d parent [] ((Node c _ cs):ns) rooms = makeGenome d c cs ns (parent:rooms)
 
     makeGenome _ _ [] [] rooms = rooms
 
@@ -172,8 +222,8 @@ module DemiGen.TreeGen where
         (Room ts [d | d <- ds, snd d /= Open]) : purgeDoors rs
 
 
-    genotypeToDungeon :: [Room] -> Dungeon
-    genotypeToDungeon =
+    genomeToDungeon :: [Room] -> Dungeon
+    genomeToDungeon =
         foldl insertRoom (generateDungeonGrid 0 0)
 
 
