@@ -89,7 +89,12 @@ module DemiGen.Types where
 
     data DungeonTree = Leaf Room
                      | Node Room Int [DungeonTree]
+                     | Null
                      deriving (Show)
+
+    instance Eq DungeonTree where
+        (==) Null Null = True
+        (==) _ _       = False
 
 
     doorPixel :: PixelRGB8

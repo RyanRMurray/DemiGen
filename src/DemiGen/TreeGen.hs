@@ -142,8 +142,18 @@ module DemiGen.TreeGen where
 --tree mutation functions
 ---------------------------------------------------------------------------------------------------
 
-    crossover :: DungeonTree -> DungeonTree -> StdGen -> (DungeonTree, StdGen)
-    crossover donor recipient s =
+    mutate :: [Room] -> DungeonTree -> DungeonTree -> StdGen -> (DungeonTree, StdGen)
+    mutate rooms donor recipient s
+        | length muts == 0 = change rooms donor recipient s
+        | otherwise        = foldl (\(r,s) f -> f rooms donor r s) (recipient,s5) muts
+      where
+        (muts,  s2) = Rand.runRand (Rand.fromList [([crossover], 0.7), ([], 0.3)]) s
+        (muts2, s3) = Rand.runRand (Rand.fromList [(muts ++ [grow], 0.5), (muts, 0.5)]) s
+        (muts3, s4) = Rand.runRand (Rand.fromList [(muts2 ++ [trim], 0.5), (muts2, 0.5)]) s
+        (muts4, s5) = Rand.runRand (Rand.fromList [(muts3 ++ [change], 0.5), (muts3, 0.5)]) s
+
+    crossover :: [Room] -> DungeonTree -> DungeonTree -> StdGen -> (DungeonTree, StdGen)
+    crossover _ donor recipient s =
         applyToRandom f recipient s2
       where
         (new,s2) = getRandomSubTree donor s
@@ -151,6 +161,33 @@ module DemiGen.TreeGen where
 
     swapSubTree :: DungeonTree -> DungeonTree -> StdGen -> (DungeonTree, StdGen)
     swapSubTree new host s = (new, s)
+
+    grow :: [Room] -> DungeonTree -> DungeonTree -> StdGen -> (DungeonTree, StdGen)
+    grow choices _ recipient s =
+        applyToRandom f recipient s5
+      where
+        (choice1, s2) = Rand.runRand (Rand.fromList [(r,1.0)| r<-choices]) s
+        (choice2, s3) = Rand.runRand (Rand.fromList [(r,1.0)| r<-choices]) s2
+        (choice3, s4) = Rand.runRand (Rand.fromList [(r,1.0)| r<-choices]) s3
+        (choice4, s5) = Rand.runRand (Rand.fromList [(r,1.0)| r<-choices]) s4
+        chosen        = [Leaf choice1, Leaf choice2, Leaf choice3, Leaf choice4]
+        f (Leaf r) sd = (Node r 3 chosen, sd)
+        f (Node r size children) sd = (Node r size (chosen ++ children), sd) 
+
+    trim :: [Room] -> DungeonTree -> DungeonTree -> StdGen -> (DungeonTree, StdGen)
+    trim _ _ recipient s =
+        applyToRandom f recipient s
+      where
+        f (Leaf _) sd = (Null, sd)
+        f node     sd = trim [] Null node sd
+
+    change :: [Room] -> DungeonTree -> DungeonTree -> StdGen -> (DungeonTree, StdGen)
+    change choices _ recipient s =
+        applyToRandom f recipient s2
+      where
+        (choice, s2)   = Rand.runRand (Rand.fromList [(r,1.0)| r<-choices]) s
+        f (Leaf r)     sd = (Leaf choice, sd)
+        f (Node r s c) sd = (Node choice s c, sd)
 
     getRandomSubTree :: DungeonTree -> StdGen -> (DungeonTree, StdGen)
     getRandomSubTree (Leaf r) s = ((Leaf r), s)
@@ -166,17 +203,18 @@ module DemiGen.TreeGen where
     applyToRandom f (Leaf r) s = f (Leaf r) s
     applyToRandom f parent s 
         | choice == -1 = f parent s2
-        | otherwise   = applyToRandom' f parent choice s2
+        | otherwise    = applyToRandom' f parent choice s2
       where
         (Node _ _ children) = parent
-        choiceList =  (-1, 1.0) : [(i, getSize c) | (i,c) <- zip [0..length children] children]
-        (choice, s2)     = Rand.runRand (Rand.fromList choiceList) s
+        choiceList          = (-1, 1.0) : [(i, getSize c) | (i,c) <- zip [0..length children] children]
+        (choice, s2)        = Rand.runRand (Rand.fromList choiceList) s
         
-    applyToRandom' f (Node r size children) choice s =
-        let (updatedChild, s2) = applyToRandom f (children !! choice) s
-            otherChildren      = dropN children choice
-        in
-            (Node r size (updatedChild:otherChildren), s2)
+    applyToRandom' f (Node r size children) choice s 
+        | updatedChild == Null = (Node r (size-1) children, s2)
+        | otherwise            = (Node r size (updatedChild:otherChildren), s2)
+      where
+        (updatedChild, s2) = applyToRandom f (children !! choice) s
+        otherChildren      = dropN children choice
 
     dropN :: [a] -> Int -> [a]
     dropN [] _ = []
