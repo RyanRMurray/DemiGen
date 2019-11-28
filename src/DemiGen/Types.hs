@@ -1,12 +1,11 @@
 module DemiGen.Types where
 
-    import           Codec.Picture
-    import           Codec.Picture.Extra
+    import Codec.Picture
+    import Codec.Picture.Extra
 
-    import           Data.Map (Map)
-    import           Data.Heap (MinHeap)
-    import           Data.Set (Set)
-
+    import Data.Map (Map)
+    import Data.Heap (MinHeap)
+    import Data.Set (Set)
 
 --Simple functions for grid-based processes
 
@@ -88,7 +87,7 @@ module DemiGen.Types where
     type Dungeon = Map CoOrd Cell
 
     data DungeonTree = Leaf Room
-                     | Node Room Int [DungeonTree]
+                     | Node Room [DungeonTree]
                      | Null
                      deriving (Show)
 
@@ -101,7 +100,6 @@ module DemiGen.Types where
     cons a b    = a:b
 
 
-    
 
 
     doorPixel :: PixelRGB8

@@ -1,6 +1,6 @@
 module Main where
 
-    import DemiGen.TileGen
+    import DemiGen.TreeGen
 
     main :: IO ()
-    main = testout
+    main = test

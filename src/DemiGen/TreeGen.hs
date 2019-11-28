@@ -113,21 +113,21 @@ module DemiGen.TreeGen where
 ---------------------------------------------------------------------------------------------------
 
     randomTree :: [Room] -> Int -> Int -> StdGen -> (DungeonTree, StdGen)
-    randomTree rooms 0 _ seed = Rand.runRand ( Rand.fromList [(Leaf r,1.0) | r <- rooms] ) seed
+    randomTree rooms 1 _ seed = Rand.runRand ( Rand.fromList [(Leaf r,1.0) | r <- rooms] ) seed
     randomTree rooms budget maxChildren seed =
         let (childNum, seed2) = randomR (1,maxChildren) seed:: (Int, StdGen)
             (cBudgets, seed3) = distributeBudget (budget-1) childNum ([], seed2)
             (children, seed4) = randomChildren rooms cBudgets maxChildren ([], seed3)
             (pRoom, seed5)    = Rand.runRand ( Rand.fromList [(r,1.0)| r <- rooms] ) seed
         in
-            (Node pRoom budget children, seed5)
+            (Node pRoom children, seed5)
 
 
     distributeBudget :: Int -> Int -> ([Int], StdGen) -> ([Int], StdGen)
     distributeBudget 0 _ result = result
-    distributeBudget budget 0 (res, seed) = (budget:res, seed)
+    distributeBudget budget 1 (res, seed) = (budget:res, seed)
     distributeBudget budget recipients (distributed, seed) =
-        let (newDis, seed2) = randomR (0, budget) seed
+        let (newDis, seed2) = randomR (1, budget) seed
             remaining       = budget - newDis
         in
             distributeBudget remaining (recipients - 1) (newDis:distributed, seed2)
@@ -171,8 +171,8 @@ module DemiGen.TreeGen where
         (choice3, s4) = Rand.runRand (Rand.fromList [(r,1.0)| r<-choices]) s3
         (choice4, s5) = Rand.runRand (Rand.fromList [(r,1.0)| r<-choices]) s4
         chosen        = [Leaf choice1, Leaf choice2, Leaf choice3, Leaf choice4]
-        f (Leaf r) sd = (Node r 3 chosen, sd)
-        f (Node r size children) sd = (Node r size (chosen ++ children), sd) 
+        f (Leaf r) sd = (Node r chosen, sd)
+        f (Node r children) sd = (Node r (chosen ++ children), sd) 
 
     trim :: [Room] -> DungeonTree -> DungeonTree -> StdGen -> (DungeonTree, StdGen)
     trim _ _ recipient s =
@@ -185,9 +185,9 @@ module DemiGen.TreeGen where
     change choices _ recipient s =
         applyToRandom f recipient s2
       where
-        (choice, s2)   = Rand.runRand (Rand.fromList [(r,1.0)| r<-choices]) s
-        f (Leaf r)     sd = (Leaf choice, sd)
-        f (Node r s c) sd = (Node choice s c, sd)
+        (choice, s2)    = Rand.runRand (Rand.fromList [(r,1.0)| r<-choices]) s
+        f (Leaf r)   sd = (Leaf choice, sd)
+        f (Node r c) sd = (Node choice c, sd)
 
     getRandomSubTree :: DungeonTree -> StdGen -> (DungeonTree, StdGen)
     getRandomSubTree (Leaf r) s = ((Leaf r), s)
@@ -195,9 +195,9 @@ module DemiGen.TreeGen where
         | choice == -1 = (parent, s2)
         | otherwise    = getRandomSubTree (children !! choice) s2
       where
-        (Node _ _ children) = parent
-        choiceList =  (-1, 1.0) : [(i, getSize c) | (i,c) <- zip [0..length children] children]
-        (choice, s2)     = Rand.runRand (Rand.fromList choiceList) s
+        (Node _ children) = parent
+        choiceList        =  (-1, 1.0) : [(i, getSize c) | (i,c) <- zip [0..length children] children]
+        (choice, s2)      = Rand.runRand (Rand.fromList choiceList) s
 
     applyToRandom :: (DungeonTree -> StdGen -> (DungeonTree, StdGen)) -> DungeonTree -> StdGen -> (DungeonTree, StdGen)
     applyToRandom f (Leaf r) s = f (Leaf r) s
@@ -205,15 +205,16 @@ module DemiGen.TreeGen where
         | choice == -1 = f parent s2
         | otherwise    = applyToRandom' f parent choice s2
       where
-        (Node _ _ children) = parent
+        (Node _  children)  = parent
         choiceList          = (-1, 1.0) : [(i, getSize c) | (i,c) <- zip [0..length children] children]
         (choice, s2)        = Rand.runRand (Rand.fromList choiceList) s
         
-    applyToRandom' f (Node r size children) choice s =
-        (Node r size (cons updatedChild otherChildren),s2)
+    applyToRandom' f (Node r children) choice s =
+        (Node r updated,s2)
       where
         (updatedChild, s2) = applyToRandom f (children !! choice) s
-        otherChildren      = dropN children choice
+        (a,(b:c))          = splitAt choice children
+        updated            = (++) a $ cons updatedChild c
 
 
     dropN :: [a] -> Int -> [a]
@@ -225,7 +226,7 @@ module DemiGen.TreeGen where
         
     getSize :: DungeonTree -> Rational
     getSize (Leaf _) = 1
-    getSize (Node _ size _) = fromIntegral size
+    getSize (Node _  cs) = (+) 1 $ sum $ map getSize cs
 
 --tree to dungeon functions
 ---------------------------------------------------------------------------------------------------
@@ -233,10 +234,10 @@ module DemiGen.TreeGen where
     treeToGenome :: DungeonTree -> [Room]
     treeToGenome (Leaf (Room ts _)) = [Room ts []]
 
-    treeToGenome (Node r _ cs) = purgeDoors $
+    treeToGenome (Node r cs) = purgeDoors $
         makeGenome 
             (insertRoom (generateDungeonGrid 0 0) r) 
-            r cs [] []
+            r cs [] [r]
 
     
     makeGenome :: Dungeon -> Room -> [DungeonTree] -> [DungeonTree] -> [Room] -> [Room]
@@ -245,12 +246,12 @@ module DemiGen.TreeGen where
             Nothing -> makeGenome d parent cs next rooms
             Just (d2, p2, c2) -> makeGenome d2 p2 cs next (c2:rooms)
 
-    makeGenome d parent ((Node r _ subCs):cs) next rooms =
+    makeGenome d parent ((Node r subCs):cs) next rooms =
         case insertChildRoom d parent r of
             Nothing -> makeGenome d parent cs next rooms
-            Just (d2, p2, c2) -> makeGenome d2 p2 cs (next ++ [Node c2 0 subCs]) rooms
+            Just (d2, p2, c2) -> makeGenome d2 p2 cs (next ++ [Node c2 subCs]) rooms
 
-    makeGenome d parent [] ((Node c _ cs):ns) rooms = makeGenome d c cs ns (parent:rooms)
+    makeGenome d parent [] ((Node c cs):ns) rooms = makeGenome d c cs ns (parent:rooms)
 
     makeGenome _ _ [] [] rooms = rooms
 
@@ -297,3 +298,11 @@ module DemiGen.TreeGen where
     printDungeonPixel Conn = doorPixel
     printDungeonPixel Occupied = tilePixel
     printDungeonPixel Empty = PixelRGB8 255 255 255
+
+
+    test = do
+        rooms <- allRooms
+        let (t1,s1) = randomTree rooms 500 4 (mkStdGen 4210)
+            (t2,s2) = randomTree rooms 500 4 s1
+            (t3,s3) = mutate rooms t1 t2 s2
+        printRawDungeon $ genomeToDungeon $ treeToGenome t3

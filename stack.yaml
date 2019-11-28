@@ -39,7 +39,7 @@ packages:
 #   commit: e7b331f14bcffb8367cd58fbfc8b40ec7642100a
 #
 extra-deps:
-#- grid-7.8.14@sha256:15956664586968bb9bc19444d2db71ddb2bcde859a86d077b050d882ed513611
+- grid-7.8.14@sha256:15956664586968bb9bc19444d2db71ddb2bcde859a86d077b050d882ed513611
 
 
 # Override default flag values for local packages and extra-deps
