@@ -144,13 +144,13 @@ module DemiGen.TreeGen where
 
     mutate :: [Room] -> DungeonTree -> DungeonTree -> StdGen -> (DungeonTree, StdGen)
     mutate rooms donor recipient s
-        | length muts == 0 = change rooms donor recipient s
-        | otherwise        = foldl (\(r,s) f -> f rooms donor r s) (recipient,s5) muts
+        | length muts4 == 0 = change rooms donor recipient s
+        | otherwise        = foldl (\(r,s) f -> f rooms donor r s) (recipient,s5) muts4
       where
         (muts,  s2) = Rand.runRand (Rand.fromList [([crossover], 0.7), ([], 0.3)]) s
-        (muts2, s3) = Rand.runRand (Rand.fromList [(muts ++ [grow], 0.5), (muts, 0.5)]) s
+        (muts2, s3) = Rand.runRand (Rand.fromList [(muts ++ replicate 3 grow, 0.5), (muts, 0.5)]) s
         (muts3, s4) = Rand.runRand (Rand.fromList [(muts2 ++ [trim], 0.5), (muts2, 0.5)]) s
-        (muts4, s5) = Rand.runRand (Rand.fromList [(muts3 ++ [change], 0.5), (muts3, 0.5)]) s
+        (muts4, s5) = Rand.runRand (Rand.fromList [(muts3 ++ replicate 2 change, 0.5), (muts3, 0.5)]) s
 
     crossover :: [Room] -> DungeonTree -> DungeonTree -> StdGen -> (DungeonTree, StdGen)
     crossover _ donor recipient s =
