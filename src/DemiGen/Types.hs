@@ -95,6 +95,13 @@ module DemiGen.Types where
     instance Eq DungeonTree where
         (==) Null Null = True
         (==) _ _       = False
+    
+    cons :: DungeonTree -> [DungeonTree] -> [DungeonTree]
+    cons Null n = n
+    cons a b    = a:b
+
+
+    
 
 
     doorPixel :: PixelRGB8

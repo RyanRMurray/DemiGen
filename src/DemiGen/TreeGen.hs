@@ -179,7 +179,7 @@ module DemiGen.TreeGen where
         applyToRandom f recipient s
       where
         f (Leaf _) sd = (Null, sd)
-        f node     sd = trim [] Null node sd
+        f node     sd = trim [] Null node $ snd $ Rand.next sd
 
     change :: [Room] -> DungeonTree -> DungeonTree -> StdGen -> (DungeonTree, StdGen)
     change choices _ recipient s =
@@ -209,12 +209,12 @@ module DemiGen.TreeGen where
         choiceList          = (-1, 1.0) : [(i, getSize c) | (i,c) <- zip [0..length children] children]
         (choice, s2)        = Rand.runRand (Rand.fromList choiceList) s
         
-    applyToRandom' f (Node r size children) choice s 
-        | updatedChild == Null = (Node r (size-1) children, s2)
-        | otherwise            = (Node r size (updatedChild:otherChildren), s2)
+    applyToRandom' f (Node r size children) choice s =
+        (Node r size (cons updatedChild otherChildren),s2)
       where
         (updatedChild, s2) = applyToRandom f (children !! choice) s
         otherChildren      = dropN children choice
+
 
     dropN :: [a] -> Int -> [a]
     dropN [] _ = []
