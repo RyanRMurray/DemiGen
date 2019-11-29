@@ -293,7 +293,7 @@ module DemiGen.TreeGen where
 
     generation ::  ([DungeonTree]->[DungeonTree]) -> [DungeonTree] -> [Room] -> StdGen -> ([DungeonTree],StdGen)
     generation f population rooms s =
-        (population,s2)
+        (population,s3)
       where
         (shuffled,s2) = Rand.runRand (shuffleM population) s
         tourneys      = tourneys' shuffled
@@ -301,7 +301,7 @@ module DemiGen.TreeGen where
 
     tourneys' :: [DungeonTree] -> [[DungeonTree]]
     tourneys' p
-        | length p /= 4 = t:(tourneys' ts)
+        | length p /= 4 = t : tourneys' ts
         | otherwise     = [p]
       where
         (t,ts) = splitAt 4 p
@@ -322,7 +322,7 @@ module DemiGen.TreeGen where
 
 
     byRooms :: [DungeonTree] -> [DungeonTree]
-    byRooms trees = map fst $ sortOn snd [(t,length g) | t <- trees, let g = treeToGenome t]
+    byRooms trees = reverse $ map fst $ sortOn snd [(t,length g) | t <- trees, let g = treeToGenome t]
 
     
 
@@ -359,18 +359,8 @@ module DemiGen.TreeGen where
     printDungeonPixel Occupied = tilePixel
     printDungeonPixel Empty = PixelRGB8 255 255 255
 
-
     test = do
         rooms <- allRooms
-        let (t1,s1) = randomTree rooms 500 4 (mkStdGen 4210)
-            (t2,s2) = randomTree rooms 500 4 s1
-            (t3,s3) = mutate rooms t1 t2 s2
-            (t4,s4) = mutate rooms t1 t3 s3
-            (t5,s5) = mutate rooms t1 t4 s4
-            (t6,s6) = mutate rooms t1 t5 s5
-            (t7,s7) = mutate rooms t1 t6 s6
-            (t8,s8) = mutate rooms t1 t7 s7
-            (t9,s9) = mutate rooms t1 t8 s8
-            (t10,s10) = mutate rooms t1 t9 s9
-            (t11,s11) = mutate rooms t1 t10 s10
-        printRawDungeon $ genomeToDungeon $ treeToGenome t11
+        let (pop1,s1) = randomTrees 4800 rooms 500 4 (mkStdGen 999)
+            (x,   sx) = geneticDungeon 40000 byRooms pop1 rooms s1
+        printRawDungeon $ genomeToDungeon $ treeToGenome x
