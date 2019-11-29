@@ -3,15 +3,16 @@ module DemiGen.TreeGen where
 
     import           Data.List as L
     import qualified Data.Map as M
-    import qualified Data.Heap as H
     import qualified Data.Set as S
     import           Data.Map (Map)
-    import           Data.Heap (MinHeap)
     import           Data.Set (Set)
-    import           Data.Either
 
     import           System.Random
+    import           System.Random.Shuffle
     import           Control.Monad.Random as Rand
+
+    import           Data.Ord
+    import           Data.Either
 
     import           Codec.Picture
     import           Codec.Picture.Extra
@@ -112,6 +113,19 @@ module DemiGen.TreeGen where
 --random tree generator
 ---------------------------------------------------------------------------------------------------
 
+    randomTrees :: Int -> [Room] -> Int -> Int -> StdGen -> ([DungeonTree], StdGen)
+    randomTrees 1 r n m s = 
+        ([t],s2)
+      where
+        (t,s2) = randomTree r n m s
+
+    randomTrees num r n m s =
+        (t:ts,s3)
+      where
+        (t,s2)  = randomTree r n m s
+        (ts,s3) = randomTrees (num-1) r n m s2
+
+
     randomTree :: [Room] -> Int -> Int -> StdGen -> (DungeonTree, StdGen)
     randomTree rooms 1 _ seed = Rand.runRand ( Rand.fromList [(Leaf r,1.0) | r <- rooms] ) seed
     randomTree rooms budget maxChildren seed =
@@ -175,8 +189,8 @@ module DemiGen.TreeGen where
         f (Node r children) sd = (Node r (chosen ++ children), sd) 
 
     trim :: [Room] -> DungeonTree -> DungeonTree -> StdGen -> (DungeonTree, StdGen)
-    trim _ _ recipient s =
-        applyToRandom f recipient s
+    trim _ _ =
+        applyToRandom f
       where
         f (Leaf _) sd = (Null, sd)
         f node     sd = trim [] Null node $ snd $ Rand.next sd
@@ -265,6 +279,52 @@ module DemiGen.TreeGen where
     genomeToDungeon =
         foldl insertRoom (generateDungeonGrid 0 0)
 
+--various fitness functions
+---------------------------------------------------------------------------------------------------
+    
+    geneticDungeon :: Int -> ([DungeonTree]->[DungeonTree]) -> [DungeonTree] -> [Room] -> StdGen -> (DungeonTree, StdGen)
+    geneticDungeon 1 f pop _ s = (head $ f pop, s)
+
+    geneticDungeon gens f pop rooms s =
+        geneticDungeon (gens-1) f nextPop rooms s2
+      where
+        (nextPop, s2) = generation f pop rooms s
+
+
+    generation ::  ([DungeonTree]->[DungeonTree]) -> [DungeonTree] -> [Room] -> StdGen -> ([DungeonTree],StdGen)
+    generation f population rooms s =
+        (population,s2)
+      where
+        (shuffled,s2) = Rand.runRand (shuffleM population) s
+        tourneys      = tourneys' shuffled
+        (newPop,s3)   = foldl (\(d,sx) t -> foldTournaments f d t rooms sx) ([],s2) tourneys
+
+    tourneys' :: [DungeonTree] -> [[DungeonTree]]
+    tourneys' p
+        | length p /= 4 = t:(tourneys' ts)
+        | otherwise     = [p]
+      where
+        (t,ts) = splitAt 4 p
+
+    foldTournaments ::  ([DungeonTree]->[DungeonTree]) -> [DungeonTree] -> [DungeonTree] -> [Room] -> StdGen -> ([DungeonTree], StdGen)
+    foldTournaments f done next rooms s =
+        (res ++ done,s2)
+      where
+        (res, s2) = tournament f next rooms s
+
+    tournament ::  ([DungeonTree]->[DungeonTree]) -> [DungeonTree] -> [Room] -> StdGen -> ([DungeonTree],StdGen)
+    tournament f competitors rooms s = 
+        ([first, second, child1, child2],s3)
+      where
+        (first:second:_) = f competitors
+        (child1,s2)      = mutate rooms first second s
+        (child2,s3)      = mutate rooms second first s2
+
+
+    byRooms :: [DungeonTree] -> [DungeonTree]
+    byRooms trees = map fst $ sortOn snd [(t,length g) | t <- trees, let g = treeToGenome t]
+
+    
 
 --test outputs
 ---------------------------------------------------------------------------------------------------
@@ -305,4 +365,12 @@ module DemiGen.TreeGen where
         let (t1,s1) = randomTree rooms 500 4 (mkStdGen 4210)
             (t2,s2) = randomTree rooms 500 4 s1
             (t3,s3) = mutate rooms t1 t2 s2
-        printRawDungeon $ genomeToDungeon $ treeToGenome t3
+            (t4,s4) = mutate rooms t1 t3 s3
+            (t5,s5) = mutate rooms t1 t4 s4
+            (t6,s6) = mutate rooms t1 t5 s5
+            (t7,s7) = mutate rooms t1 t6 s6
+            (t8,s8) = mutate rooms t1 t7 s7
+            (t9,s9) = mutate rooms t1 t8 s8
+            (t10,s10) = mutate rooms t1 t9 s9
+            (t11,s11) = mutate rooms t1 t10 s10
+        printRawDungeon $ genomeToDungeon $ treeToGenome t11
