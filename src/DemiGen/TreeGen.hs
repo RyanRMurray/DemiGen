@@ -159,7 +159,7 @@ module DemiGen.TreeGen where
     mutate :: [Room] -> DungeonTree -> DungeonTree -> StdGen -> (DungeonTree, StdGen)
     mutate rooms donor recipient s
         | length muts4 == 0 = change rooms donor recipient s
-        | otherwise        = foldl (\(r,s) f -> f rooms donor r s) (recipient,s5) muts4
+        | otherwise         = foldl (\(r,sx) f -> f rooms donor r sx) (recipient,s5) muts4
       where
         (muts,  s2) = Rand.runRand (Rand.fromList [([crossover], 0.7), ([], 0.3)]) s
         (muts2, s3) = Rand.runRand (Rand.fromList [(muts ++ replicate 3 grow, 0.5), (muts, 0.5)]) s
@@ -293,7 +293,7 @@ module DemiGen.TreeGen where
 
     generation ::  ([DungeonTree]->[DungeonTree]) -> [DungeonTree] -> [Room] -> StdGen -> ([DungeonTree],StdGen)
     generation f population rooms s =
-        (population,s3)
+        (newPop,s3)
       where
         (shuffled,s2) = Rand.runRand (shuffleM population) s
         tourneys      = tourneys' shuffled
@@ -361,6 +361,7 @@ module DemiGen.TreeGen where
 
     test = do
         rooms <- allRooms
-        let (pop1,s1) = randomTrees 4800 rooms 500 4 (mkStdGen 999)
-            (x,   sx) = geneticDungeon 40000 byRooms pop1 rooms s1
+        s     <- newStdGen
+        let (pop1,s1) = randomTrees 40 rooms 80 6 s
+            (x,   sx) = geneticDungeon 50 byRooms pop1 rooms s1
         printRawDungeon $ genomeToDungeon $ treeToGenome x
