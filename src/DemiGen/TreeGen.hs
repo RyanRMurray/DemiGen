@@ -1,3 +1,5 @@
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE BangPatterns #-}
 module DemiGen.TreeGen where
     import          DemiGen.Types
 
@@ -7,15 +9,18 @@ module DemiGen.TreeGen where
     import           Data.Map (Map)
     import           Data.Set (Set)
 
-    import           System.Random
+    import           System.Random.Mersenne.Pure64
     import           System.Random.Shuffle
-    import           Control.Monad.Random as Rand
+
+    import           Control.Monad
 
     import           Data.Ord
     import           Data.Either
 
     import           Codec.Picture
     import           Codec.Picture.Extra
+
+    import           Debug.Trace
 
 --Functions for generating input room templates and starting dungeon
 --------------------------------------------------------------------------------------------------------
@@ -100,6 +105,7 @@ module DemiGen.TreeGen where
         (newD, newChild) <- msum [attemptAttach d r | r <- offsets]        
         Just (newD, (setConn parent newChild target), newChild)
 
+
     attemptAttach :: Dungeon -> Room -> Maybe (Dungeon, Room)
     attemptAttach d r 
         | noCollision d r (0,0) = Just $ (insertRoom d r, r)
@@ -113,7 +119,13 @@ module DemiGen.TreeGen where
 --random tree generator
 ---------------------------------------------------------------------------------------------------
 
-    randomTrees :: Int -> [Room] -> Int -> Int -> StdGen -> ([DungeonTree], StdGen)
+    randomFrom :: [(a,Int)] -> PureMT -> (a,PureMT)
+    randomFrom list s = (choices !! (i `mod` length choices), s2)
+        where
+            choices = concat [replicate n c | (c,n) <-list]
+            (i,s2)  = randomInt s
+
+    randomTrees :: Int -> [Room] -> Int -> Int -> PureMT -> ([DungeonTree], PureMT)
     randomTrees 1 r n m s = 
         ([t],s2)
       where
@@ -126,27 +138,29 @@ module DemiGen.TreeGen where
         (ts,s3) = randomTrees (num-1) r n m s2
 
 
-    randomTree :: [Room] -> Int -> Int -> StdGen -> (DungeonTree, StdGen)
-    randomTree rooms 1 _ seed = Rand.runRand ( Rand.fromList [(Leaf r,1.0) | r <- rooms] ) seed
+    randomTree :: [Room] -> Int -> Int -> PureMT -> (DungeonTree, PureMT)
+    randomTree rooms 1 _ seed = randomFrom [(Leaf r,1) | r <- rooms] seed
     randomTree rooms budget maxChildren seed =
-        let (childNum, seed2) = randomR (1,maxChildren) seed:: (Int, StdGen)
+        let (seedRes,  seed2) = randomInt seed
+            childNum          = 1 + seedRes `mod` maxChildren 
             (cBudgets, seed3) = distributeBudget (budget-1) childNum ([], seed2)
             (children, seed4) = randomChildren rooms cBudgets maxChildren ([], seed3)
-            (pRoom, seed5)    = Rand.runRand ( Rand.fromList [(r,1.0)| r <- rooms] ) seed
+            (pRoom, seed5)    = randomFrom [(r,1)| r <- rooms] seed4
         in
             (Node pRoom children, seed5)
 
 
-    distributeBudget :: Int -> Int -> ([Int], StdGen) -> ([Int], StdGen)
+    distributeBudget :: Int -> Int -> ([Int], PureMT) -> ([Int], PureMT)
     distributeBudget 0 _ result = result
     distributeBudget budget 1 (res, seed) = (budget:res, seed)
     distributeBudget budget recipients (distributed, seed) =
-        let (newDis, seed2) = randomR (1, budget) seed
-            remaining       = budget - newDis
+        let (seedRes, seed2) = randomInt seed
+            newDis           = 1 + seedRes `mod` budget
+            remaining        = budget - newDis
         in
             distributeBudget remaining (recipients - 1) (newDis:distributed, seed2)
 
-    randomChildren :: [Room] -> [Int] -> Int -> ([DungeonTree], StdGen) -> ([DungeonTree], StdGen)
+    randomChildren :: [Room] -> [Int] -> Int -> ([DungeonTree], PureMT) -> ([DungeonTree], PureMT)
     randomChildren _ [] _ result = result
     randomChildren rooms (c:cs) maxChildren (res, seed) =
         randomChildren rooms cs maxChildren (newC:res, seed2)
@@ -156,72 +170,72 @@ module DemiGen.TreeGen where
 --tree mutation functions
 ---------------------------------------------------------------------------------------------------
 
-    mutate :: [Room] -> DungeonTree -> DungeonTree -> StdGen -> (DungeonTree, StdGen)
+    mutate :: [Room] -> DungeonTree -> DungeonTree -> PureMT -> (DungeonTree, PureMT)
     mutate rooms donor recipient s
         | length muts4 == 0 = change rooms donor recipient s
-        | otherwise         = foldl (\(r,sx) f -> f rooms donor r sx) (recipient,s5) muts4
+        | otherwise         = foldl' (\(r,sx) f -> f rooms donor r sx) (recipient,s5) muts4
       where
-        (muts,  s2) = Rand.runRand (Rand.fromList [([crossover], 0.7), ([], 0.3)]) s
-        (muts2, s3) = Rand.runRand (Rand.fromList [(muts ++ replicate 3 grow, 0.5), (muts, 0.5)]) s
-        (muts3, s4) = Rand.runRand (Rand.fromList [(muts2 ++ [trim], 0.5), (muts2, 0.5)]) s
-        (muts4, s5) = Rand.runRand (Rand.fromList [(muts3 ++ replicate 2 change, 0.5), (muts3, 0.5)]) s
+        (muts,  s2) = randomFrom [([crossover], 7), ([], 3)] s
+        (muts2, s3) = randomFrom [(muts ++ replicate 3 grow, 5), (muts, 5)] s
+        --(muts3, s4) = randomFrom [(muts2 ++ [trim], 5), (muts2, 5)] s
+        (muts4, s5) = randomFrom [(muts2 ++ replicate 2 change, 5), (muts2, 5)] s
 
-    crossover :: [Room] -> DungeonTree -> DungeonTree -> StdGen -> (DungeonTree, StdGen)
+    crossover :: [Room] -> DungeonTree -> DungeonTree -> PureMT -> (DungeonTree, PureMT)
     crossover _ donor recipient s =
         applyToRandom f recipient s2
       where
         (new,s2) = getRandomSubTree donor s
         f        = swapSubTree new
 
-    swapSubTree :: DungeonTree -> DungeonTree -> StdGen -> (DungeonTree, StdGen)
+    swapSubTree :: DungeonTree -> DungeonTree -> PureMT -> (DungeonTree, PureMT)
     swapSubTree new host s = (new, s)
 
-    grow :: [Room] -> DungeonTree -> DungeonTree -> StdGen -> (DungeonTree, StdGen)
+    grow :: [Room] -> DungeonTree -> DungeonTree -> PureMT -> (DungeonTree, PureMT)
     grow choices _ recipient s =
         applyToRandom f recipient s5
       where
-        (choice1, s2) = Rand.runRand (Rand.fromList [(r,1.0)| r<-choices]) s
-        (choice2, s3) = Rand.runRand (Rand.fromList [(r,1.0)| r<-choices]) s2
-        (choice3, s4) = Rand.runRand (Rand.fromList [(r,1.0)| r<-choices]) s3
-        (choice4, s5) = Rand.runRand (Rand.fromList [(r,1.0)| r<-choices]) s4
+        (choice1, s2) = randomFrom [(r,1)| r<-choices] s
+        (choice2, s3) = randomFrom [(r,1)| r<-choices] s2
+        (choice3, s4) = randomFrom [(r,1)| r<-choices] s3
+        (choice4, s5) = randomFrom [(r,1)| r<-choices] s4
         chosen        = [Leaf choice1, Leaf choice2, Leaf choice3, Leaf choice4]
         f (Leaf r) sd = (Node r chosen, sd)
         f (Node r children) sd = (Node r (chosen ++ children), sd) 
 
-    trim :: [Room] -> DungeonTree -> DungeonTree -> StdGen -> (DungeonTree, StdGen)
+    trim :: [Room] -> DungeonTree -> DungeonTree -> PureMT -> (DungeonTree, PureMT)
     trim _ _ =
         applyToRandom f
       where
         f (Leaf _) sd = (Null, sd)
-        f node     sd = trim [] Null node $ snd $ Rand.next sd
+        f node     sd = trim [] Null node $ sd
 
-    change :: [Room] -> DungeonTree -> DungeonTree -> StdGen -> (DungeonTree, StdGen)
+    change :: [Room] -> DungeonTree -> DungeonTree -> PureMT -> (DungeonTree, PureMT)
     change choices _ recipient s =
         applyToRandom f recipient s2
       where
-        (choice, s2)    = Rand.runRand (Rand.fromList [(r,1.0)| r<-choices]) s
+        (choice, s2)    = randomFrom [(r,1)| r<-choices] s
         f (Leaf r)   sd = (Leaf choice, sd)
         f (Node r c) sd = (Node choice c, sd)
 
-    getRandomSubTree :: DungeonTree -> StdGen -> (DungeonTree, StdGen)
+    getRandomSubTree :: DungeonTree -> PureMT -> (DungeonTree, PureMT)
     getRandomSubTree (Leaf r) s = ((Leaf r), s)
     getRandomSubTree parent s 
         | choice == -1 = (parent, s2)
         | otherwise    = getRandomSubTree (children !! choice) s2
       where
         (Node _ children) = parent
-        choiceList        =  (-1, 1.0) : [(i, getSize c) | (i,c) <- zip [0..length children] children]
-        (choice, s2)      = Rand.runRand (Rand.fromList choiceList) s
+        choiceList        =  (-1, 1) : [(i, getSize c) | (i,c) <- zip [0..length children] children]
+        (choice, s2)      = randomFrom choiceList s
 
-    applyToRandom :: (DungeonTree -> StdGen -> (DungeonTree, StdGen)) -> DungeonTree -> StdGen -> (DungeonTree, StdGen)
+    applyToRandom :: (DungeonTree -> PureMT -> (DungeonTree, PureMT)) -> DungeonTree -> PureMT -> (DungeonTree, PureMT)
     applyToRandom f (Leaf r) s = f (Leaf r) s
     applyToRandom f parent s 
         | choice == -1 = f parent s2
         | otherwise    = applyToRandom' f parent choice s2
       where
         (Node _  children)  = parent
-        choiceList          = (-1, 1.0) : [(i, getSize c) | (i,c) <- zip [0..length children] children]
-        (choice, s2)        = Rand.runRand (Rand.fromList choiceList) s
+        choiceList          = (-1, 1) : [(i, getSize c) | (i,c) <- zip [0..length children] children]
+        (choice, s2)        = randomFrom choiceList s
         
     applyToRandom' f (Node r children) choice s =
         (Node r updated,s2)
@@ -238,7 +252,7 @@ module DemiGen.TreeGen where
      | otherwise = x : dropN xs (n-1) 
 
         
-    getSize :: DungeonTree -> Rational
+    getSize :: DungeonTree -> Int
     getSize (Leaf _) = 1
     getSize (Node _  cs) = (+) 1 $ sum $ map getSize cs
 
@@ -282,22 +296,22 @@ module DemiGen.TreeGen where
 --various fitness functions
 ---------------------------------------------------------------------------------------------------
     
-    geneticDungeon :: Int -> ([DungeonTree]->[DungeonTree]) -> [DungeonTree] -> [Room] -> StdGen -> (DungeonTree, StdGen)
-    geneticDungeon 1 f pop _ s = (head $ f pop, s)
+    geneticDungeon :: Int -> ([DungeonTree]->[DungeonTree]) -> [DungeonTree] -> [Room] -> PureMT -> (DungeonTree, PureMT)
+    geneticDungeon 1 f !pop _ s = (head $ f pop, s)
 
-    geneticDungeon gens f pop rooms s =
+    geneticDungeon gens f !pop rooms s = trace (show gens) $
         geneticDungeon (gens-1) f nextPop rooms s2
       where
         (nextPop, s2) = generation f pop rooms s
 
 
-    generation ::  ([DungeonTree]->[DungeonTree]) -> [DungeonTree] -> [Room] -> StdGen -> ([DungeonTree],StdGen)
+    generation ::  ([DungeonTree]->[DungeonTree]) -> [DungeonTree] -> [Room] -> PureMT -> ([DungeonTree],PureMT)
     generation f population rooms s =
-        (newPop,s3)
+        (newPop,s2)
       where
-        (shuffled,s2) = Rand.runRand (shuffleM population) s
+        shuffled      = shuffle' population (length population) s
         tourneys      = tourneys' shuffled
-        (newPop,s3)   = foldl (\(d,sx) t -> foldTournaments f d t rooms sx) ([],s2) tourneys
+        (newPop,s2)   = foldl' (\(d,sx) t -> foldTournaments f d t rooms sx) ([],s) tourneys
 
     tourneys' :: [DungeonTree] -> [[DungeonTree]]
     tourneys' p
@@ -306,13 +320,13 @@ module DemiGen.TreeGen where
       where
         (t,ts) = splitAt 4 p
 
-    foldTournaments ::  ([DungeonTree]->[DungeonTree]) -> [DungeonTree] -> [DungeonTree] -> [Room] -> StdGen -> ([DungeonTree], StdGen)
+    foldTournaments ::  ([DungeonTree]->[DungeonTree]) -> [DungeonTree] -> [DungeonTree] -> [Room] -> PureMT -> ([DungeonTree], PureMT)
     foldTournaments f done next rooms s =
         (res ++ done,s2)
       where
         (res, s2) = tournament f next rooms s
 
-    tournament ::  ([DungeonTree]->[DungeonTree]) -> [DungeonTree] -> [Room] -> StdGen -> ([DungeonTree],StdGen)
+    tournament ::  ([DungeonTree]->[DungeonTree]) -> [DungeonTree] -> [Room] -> PureMT -> ([DungeonTree],PureMT)
     tournament f competitors rooms s = 
         ([first, second, child1, child2],s3)
       where
@@ -361,7 +375,7 @@ module DemiGen.TreeGen where
 
     test = do
         rooms <- allRooms
-        s     <- newStdGen
-        let (pop1,s1) = randomTrees 40 rooms 80 6 s
-            (x,   sx) = geneticDungeon 50 byRooms pop1 rooms s1
+        s     <- newPureMT
+        let (pop1,s1) = randomTrees 200 rooms 80 6 s
+            (x,   sx) = geneticDungeon 100 byRooms pop1 rooms s1
         printRawDungeon $ genomeToDungeon $ treeToGenome x

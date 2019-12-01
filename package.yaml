@@ -21,8 +21,10 @@ description:         Please see the README on GitHub at <https://github.com/Ryan
 
 dependencies:
 - random
+- mersenne-random-pure64
 - MonadRandom
 - containers
+- vector
 - unordered-containers
 - JuicyPixels >= 3.3
 - JuicyPixels-extra

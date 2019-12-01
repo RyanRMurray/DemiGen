@@ -40,8 +40,8 @@ packages:
 #
 extra-deps:
 - grid-7.8.14@sha256:15956664586968bb9bc19444d2db71ddb2bcde859a86d077b050d882ed513611
-
-
+- mwc-random-monad-0.7.3.1@sha256:e86d25f8a9f8259ab503d3692a8a21c5aeeb1ecf973aa5e6e6118d1281fb313b,1201
+- monad-primitive-0.1@sha256:dc0f6ccd61aab3a1782a12c7291b9b04f0eee0b3f5709ef53afda58784a89075,874
 # Override default flag values for local packages and extra-deps
 # flags: {}
 
