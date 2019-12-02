@@ -87,7 +87,7 @@ module DemiGen.Types where
     type Dungeon = Map CoOrd Cell
 
     data DungeonTree = Leaf Room
-                     | Node Room [DungeonTree]
+                     | Node Room Int [DungeonTree]
                      | Null
                      deriving (Show)
 

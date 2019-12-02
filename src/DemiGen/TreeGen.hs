@@ -151,7 +151,7 @@ module DemiGen.TreeGen where
             (children, seed4) = randomChildren rooms cBudgets maxChildren ([], seed3)
             (pRoom, seed5)    = randomFrom [(r,1)| r <- rooms] seed4
         in
-            (Node pRoom children, seed5)
+            (Node pRoom budget children, seed5)
 
     --given the number of children a node has, randomly distribute the budget used to generate the subtrees
     distributeBudget :: Int -> Int -> ([Int], PureMT) -> ([Int], PureMT)
@@ -202,8 +202,8 @@ module DemiGen.TreeGen where
         | choice == -1 = (parent, s2)
         | otherwise    = getRandomSubTree (children !! choice) s2
       where
-        (Node _ children) = parent
-        choiceList        =  (-1, 1) : [(i, getSize c) | (i,c) <- zip [0..length children] children]
+        (Node _ _ children) = parent
+        choiceList        =  (-1, 1) : [(i, getSize c) | (i,c) <- zip [0..] children]
         (choice, s2)      = randomFrom choiceList s
 
     --increase the size of the tree
@@ -216,8 +216,8 @@ module DemiGen.TreeGen where
         (choice3, s4) = randomFrom [(r,1)| r<-choices] s3
         (choice4, s5) = randomFrom [(r,1)| r<-choices] s4
         chosen        = [Leaf choice1, Leaf choice2, Leaf choice3, Leaf choice4]
-        f (Leaf r) sd = (Node r chosen, sd)
-        f (Node r children) sd = (Node r (chosen ++ children), sd) 
+        f (Leaf r) sd = (Node r 5 chosen, sd)
+        f (Node r  size children) sd = (Node r (size + 4) (chosen ++ children), sd) 
 
     --delete a leaf
     trim :: [Room] -> DungeonTree -> DungeonTree -> PureMT -> (DungeonTree, PureMT)
@@ -234,7 +234,7 @@ module DemiGen.TreeGen where
       where
         (choice, s2)    = randomFrom [(r,1)| r<-choices] s
         f (Leaf r)   sd = (Leaf choice, sd)
-        f (Node r c) sd = (Node choice c, sd)
+        f (Node r size c) sd = (Node choice size c, sd)
 
     --take a function that transforms a tree and apply it to a random node/leaf
     applyToRandom :: (DungeonTree -> PureMT -> (DungeonTree, PureMT)) -> DungeonTree -> PureMT -> (DungeonTree, PureMT)
@@ -243,13 +243,13 @@ module DemiGen.TreeGen where
         | choice == -1 = f parent s2
         | otherwise    = applyToRandom' f parent choice s2
       where
-        (Node _  children)  = parent
-        choiceList          = (-1, 1) : [(i, getSize c) | (i,c) <- zip [0..length children] children]
+        (Node _ _ children)  = parent
+        choiceList          = (-1, 1) : [(i, getSize c) | (i,c) <- zip [0..] children]
         (choice, s2)        = randomFrom choiceList s
         
     --insert updated subtree into parent's children list
-    applyToRandom' f (Node r children) choice s =
-        (Node r updated,s2)
+    applyToRandom' f (Node r size children) choice s =
+        (Node r (sum $ map getSize updated) updated,s2)
       where
         (updatedChild, s2) = applyToRandom f (children !! choice) s
         (a,(b:c))          = splitAt choice children
@@ -258,7 +258,7 @@ module DemiGen.TreeGen where
     --should probably just make this a feature of a node
     getSize :: DungeonTree -> Int
     getSize (Leaf _) = 1
-    getSize (Node _  cs) = (+) 1 $ sum $ map getSize cs
+    getSize (Node _ s _) = s
 
 --tree to dungeon functions
 ---------------------------------------------------------------------------------------------------
@@ -267,7 +267,7 @@ module DemiGen.TreeGen where
     treeToGenome :: DungeonTree -> [Room]
     treeToGenome (Leaf (Room ts _)) = [Room ts []]
 
-    treeToGenome (Node r cs) = purgeDoors $
+    treeToGenome (Node r size cs) = purgeDoors $
         makeGenome 
             (insertRoom (generateDungeonGrid 0 0) r) 
             r cs [] [r]
@@ -278,12 +278,12 @@ module DemiGen.TreeGen where
             Nothing -> makeGenome d parent cs next rooms
             Just (d2, p2, c2) -> makeGenome d2 p2 cs next (c2:rooms)
 
-    makeGenome d parent ((Node r subCs):cs) next rooms =
+    makeGenome d parent ((Node r _ subCs):cs) next rooms =
         case insertChildRoom d parent r of
             Nothing -> makeGenome d parent cs next rooms
-            Just (d2, p2, c2) -> makeGenome d2 p2 cs (next ++ [Node c2 subCs]) rooms
+            Just (d2, p2, c2) -> makeGenome d2 p2 cs (next ++ [Node c2 0 subCs]) rooms
 
-    makeGenome d parent [] ((Node c cs):ns) rooms = makeGenome d c cs ns (parent:rooms)
+    makeGenome d parent [] ((Node c _ cs):ns) rooms = makeGenome d c cs ns (parent:rooms)
 
     makeGenome _ _ [] [] rooms = rooms
 
