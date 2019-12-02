@@ -20,19 +20,7 @@ module DemiGen.TreeGen where
     import           Codec.Picture
     import           Codec.Picture.Extra
 
-    import           Debug.Trace
-
---Functions for generating input room templates and starting dungeon
---------------------------------------------------------------------------------------------------------
-
-    getRoomData :: TileImg -> Room
-    getRoomData input = Room
-        (S.fromList $ getTargetPixels input tilePixel) $ 
-        zip 
-            doors
-            (replicate (length doors) Open)
-        where
-            doors = getTargetPixels input doorPixel
+    import Debug.Trace
 
     roomNames :: [String]
     roomNames =
@@ -41,22 +29,36 @@ module DemiGen.TreeGen where
         , "special01", "special02", "special03"
         ]
 
+    --simple biome of all rooms
     allRooms :: IO [Room]
     allRooms = do
             inputs   <-  mapM (\n-> readPng $ "assets/rooms/"++n++".png") roomNames
             return $ map getRoomData $ L.map convertRGB8 $ rights $ inputs
+    
 
+--Functions for generating input room templates and starting dungeon
+---------------------------------------------------------------------------------------------------
+
+    --Parse an image to create a room object
+    getRoomData :: TileImg -> Room
+    getRoomData input = Room
+        (S.fromList $     getTargetPixels input tilePixel) $ 
+        [(d, Open) | d <- getTargetPixels input doorPixel]
+
+    --Get a list of the coordinates of the specified pixel colour
     getTargetPixels :: TileImg -> PixelRGB8 -> [CoOrd]
     getTargetPixels input px = filter
         (\(x,y)-> px == pixelAt input x y) $
         getGrid 12 12
 
+    --Generate an empty dungeon of the specified size (can be empty)
     generateDungeonGrid :: Int -> Int -> Map CoOrd Cell
     generateDungeonGrid x y = M.fromList
         [(c, Empty) | c <- getGrid x y]
 
 --Functions for finding valid placements of rooms and inserting them into the dungeon
 ---------------------------------------------------------------------------------------------------
+
     rotateRoom :: Room -> Int -> Room
     rotateRoom r 0 = r
     rotateRoom r 1 = rotateRoom' r (\(x,y) -> (y, 12 - x))       
@@ -69,10 +71,10 @@ module DemiGen.TreeGen where
             (\(coord, c) -> (f coord, c)) 
             $ doors r
     
-    offsetRoom :: Room -> CoOrd -> Room
-    offsetRoom r (ox,oy) = Room
-            (S.map (\(x,y)->(x+ox,y+oy)) $ tiles r) $
-            L.map (\((x,y),c)->((x+ox,y+oy),c)) $ doors r
+    offsetRoom :: Room -> Int -> Int -> Room
+    offsetRoom (Room ts ds) ox oy = Room
+            (S.map (\ (x,y)   -> (x+ox,y+oy)   ) ts) $
+             L.map (\((x,y),c)->((x+ox,y+oy),c)) ds
 
     noCollision :: Dungeon -> Room -> CoOrd -> Bool
     noCollision d (Room ts _) (ox,oy) = 
@@ -96,14 +98,14 @@ module DemiGen.TreeGen where
         where
             d2 = S.foldl (\dg c -> M.insert c Occupied dg) d (tiles r)
 
+    --Take a dungeon and a pair of rooms, if it is possible to attach the child room to the parent, return the updated dungeon
     insertChildRoom :: Dungeon -> Room -> Room -> Maybe (Dungeon, Room, Room)
     insertChildRoom d parent child = do
-        target <- findValidDoor d parent
+        (tx,ty) <- findValidDoor d parent
         let rotations     = [rotateRoom child rot | rot <- [0..3]]
-            dooroffsets   = [offsetRoom (setConn r parent (x,y)) (-x,-y) | r <- rotations, ((x,y),_) <- doors r]
-            offsets       = [offsetRoom r target | r <- dooroffsets]
+            offsets       = [offsetRoom (setConn r parent (x,y)) (tx-x) (ty-y) | r <- rotations, ((x,y),_) <- doors r]
         (newD, newChild) <- msum [attemptAttach d r | r <- offsets]        
-        Just (newD, (setConn parent newChild target), newChild)
+        Just (newD, (setConn parent newChild (tx,ty)), newChild)
 
 
     attemptAttach :: Dungeon -> Room -> Maybe (Dungeon, Room)
@@ -115,16 +117,17 @@ module DemiGen.TreeGen where
     setConn (Room ts doors) connected door =
         Room ts $ (door, To connected) : [(c, t) | (c,t) <- doors, c /= door]
           
-
 --random tree generator
 ---------------------------------------------------------------------------------------------------
 
+    --take a list of items and their relative frequency and return a randomly selected item and the updated PRNG
     randomFrom :: [(a,Int)] -> PureMT -> (a,PureMT)
     randomFrom list s = (choices !! (i `mod` length choices), s2)
         where
             choices = concat [replicate n c | (c,n) <-list]
             (i,s2)  = randomInt s
 
+    --generate the specified number of random trees given a  set of rooms, maximum size and number of children a node can have
     randomTrees :: Int -> [Room] -> Int -> Int -> PureMT -> ([DungeonTree], PureMT)
     randomTrees 1 r n m s = 
         ([t],s2)
@@ -138,6 +141,7 @@ module DemiGen.TreeGen where
         (ts,s3) = randomTrees (num-1) r n m s2
 
 
+    --generate a random tree given a  set of rooms, maximum size and number of children a node can have
     randomTree :: [Room] -> Int -> Int -> PureMT -> (DungeonTree, PureMT)
     randomTree rooms 1 _ seed = randomFrom [(Leaf r,1) | r <- rooms] seed
     randomTree rooms budget maxChildren seed =
@@ -149,7 +153,7 @@ module DemiGen.TreeGen where
         in
             (Node pRoom children, seed5)
 
-
+    --given the number of children a node has, randomly distribute the budget used to generate the subtrees
     distributeBudget :: Int -> Int -> ([Int], PureMT) -> ([Int], PureMT)
     distributeBudget 0 _ result = result
     distributeBudget budget 1 (res, seed) = (budget:res, seed)
@@ -170,6 +174,7 @@ module DemiGen.TreeGen where
 --tree mutation functions
 ---------------------------------------------------------------------------------------------------
 
+    --mutate applies a number of transformations to new trees. 
     mutate :: [Room] -> DungeonTree -> DungeonTree -> PureMT -> (DungeonTree, PureMT)
     mutate rooms donor recipient s
         | length muts4 == 0 = change rooms donor recipient s
@@ -177,9 +182,10 @@ module DemiGen.TreeGen where
       where
         (muts,  s2) = randomFrom [([crossover], 7), ([], 3)] s
         (muts2, s3) = randomFrom [(muts ++ replicate 3 grow, 5), (muts, 5)] s
-        --(muts3, s4) = randomFrom [(muts2 ++ [trim], 5), (muts2, 5)] s
+        (muts3, s4) = randomFrom [(muts2 ++ [trim], 5), (muts2, 5)] s
         (muts4, s5) = randomFrom [(muts2 ++ replicate 2 change, 5), (muts2, 5)] s
 
+    --transplant a subtree from one dungeon to another
     crossover :: [Room] -> DungeonTree -> DungeonTree -> PureMT -> (DungeonTree, PureMT)
     crossover _ donor recipient s =
         applyToRandom f recipient s2
@@ -190,6 +196,17 @@ module DemiGen.TreeGen where
     swapSubTree :: DungeonTree -> DungeonTree -> PureMT -> (DungeonTree, PureMT)
     swapSubTree new host s = (new, s)
 
+    getRandomSubTree :: DungeonTree -> PureMT -> (DungeonTree, PureMT)
+    getRandomSubTree (Leaf r) s = ((Leaf r), s)
+    getRandomSubTree parent s 
+        | choice == -1 = (parent, s2)
+        | otherwise    = getRandomSubTree (children !! choice) s2
+      where
+        (Node _ children) = parent
+        choiceList        =  (-1, 1) : [(i, getSize c) | (i,c) <- zip [0..length children] children]
+        (choice, s2)      = randomFrom choiceList s
+
+    --increase the size of the tree
     grow :: [Room] -> DungeonTree -> DungeonTree -> PureMT -> (DungeonTree, PureMT)
     grow choices _ recipient s =
         applyToRandom f recipient s5
@@ -202,13 +219,15 @@ module DemiGen.TreeGen where
         f (Leaf r) sd = (Node r chosen, sd)
         f (Node r children) sd = (Node r (chosen ++ children), sd) 
 
+    --delete a leaf
     trim :: [Room] -> DungeonTree -> DungeonTree -> PureMT -> (DungeonTree, PureMT)
-    trim _ _ =
-        applyToRandom f
+    trim _ _ node = 
+        applyToRandom f node
       where
-        f (Leaf _) sd = (Null, sd)
-        f node     sd = trim [] Null node $ sd
-
+        f (Leaf _) s = (Null, s)
+        f child    s = applyToRandom f child s
+    
+    --alter the type of room a node represents, possibly changing the layout of its children
     change :: [Room] -> DungeonTree -> DungeonTree -> PureMT -> (DungeonTree, PureMT)
     change choices _ recipient s =
         applyToRandom f recipient s2
@@ -217,16 +236,7 @@ module DemiGen.TreeGen where
         f (Leaf r)   sd = (Leaf choice, sd)
         f (Node r c) sd = (Node choice c, sd)
 
-    getRandomSubTree :: DungeonTree -> PureMT -> (DungeonTree, PureMT)
-    getRandomSubTree (Leaf r) s = ((Leaf r), s)
-    getRandomSubTree parent s 
-        | choice == -1 = (parent, s2)
-        | otherwise    = getRandomSubTree (children !! choice) s2
-      where
-        (Node _ children) = parent
-        choiceList        =  (-1, 1) : [(i, getSize c) | (i,c) <- zip [0..length children] children]
-        (choice, s2)      = randomFrom choiceList s
-
+    --take a function that transforms a tree and apply it to a random node/leaf
     applyToRandom :: (DungeonTree -> PureMT -> (DungeonTree, PureMT)) -> DungeonTree -> PureMT -> (DungeonTree, PureMT)
     applyToRandom f (Leaf r) s = f (Leaf r) s
     applyToRandom f parent s 
@@ -237,21 +247,15 @@ module DemiGen.TreeGen where
         choiceList          = (-1, 1) : [(i, getSize c) | (i,c) <- zip [0..length children] children]
         (choice, s2)        = randomFrom choiceList s
         
+    --insert updated subtree into parent's children list
     applyToRandom' f (Node r children) choice s =
         (Node r updated,s2)
       where
         (updatedChild, s2) = applyToRandom f (children !! choice) s
         (a,(b:c))          = splitAt choice children
         updated            = (++) a $ cons updatedChild c
-
-
-    dropN :: [a] -> Int -> [a]
-    dropN [] _ = []
-    dropN (x:xs) n 
-     | n == 0    = xs
-     | otherwise = x : dropN xs (n-1) 
-
-        
+     
+    --should probably just make this a feature of a node
     getSize :: DungeonTree -> Int
     getSize (Leaf _) = 1
     getSize (Node _  cs) = (+) 1 $ sum $ map getSize cs
@@ -259,6 +263,7 @@ module DemiGen.TreeGen where
 --tree to dungeon functions
 ---------------------------------------------------------------------------------------------------
 
+    --convert the tree to a list of rooms offset to their positions in the dungeon
     treeToGenome :: DungeonTree -> [Room]
     treeToGenome (Leaf (Room ts _)) = [Room ts []]
 
@@ -267,7 +272,6 @@ module DemiGen.TreeGen where
             (insertRoom (generateDungeonGrid 0 0) r) 
             r cs [] [r]
 
-    
     makeGenome :: Dungeon -> Room -> [DungeonTree] -> [DungeonTree] -> [Room] -> [Room]
     makeGenome d parent ((Leaf r):cs) next rooms = 
         case insertChildRoom d parent r of
@@ -283,12 +287,13 @@ module DemiGen.TreeGen where
 
     makeGenome _ _ [] [] rooms = rooms
 
+    --delete unused doors
     purgeDoors :: [Room] -> [Room]
     purgeDoors [] = []
     purgeDoors ((Room ts ds):rs) = 
         (Room ts [d | d <- ds, snd d /= Open]) : purgeDoors rs
 
-
+    --take a set of rooms and create a Dungeon
     genomeToDungeon :: [Room] -> Dungeon
     genomeToDungeon =
         foldl insertRoom (generateDungeonGrid 0 0)
@@ -296,8 +301,10 @@ module DemiGen.TreeGen where
 --various fitness functions
 ---------------------------------------------------------------------------------------------------
     
-    geneticDungeon :: Int -> ([DungeonTree]->[DungeonTree]) -> [DungeonTree] -> [Room] -> PureMT -> (DungeonTree, PureMT)
-    geneticDungeon 1 f !pop _ s = (head $ f pop, s)
+    geneticDungeon :: Int -> (DungeonTree -> Int) -> [DungeonTree] -> [Room] -> PureMT -> (DungeonTree, PureMT)
+    geneticDungeon 1 f !pop _ s = (best, s)
+      where
+        (best,_) = head . reverse $ sortOn snd [(t, f t) | t <- pop]
 
     geneticDungeon gens f !pop rooms s = trace (show gens) $
         geneticDungeon (gens-1) f nextPop rooms s2
@@ -305,7 +312,7 @@ module DemiGen.TreeGen where
         (nextPop, s2) = generation f pop rooms s
 
 
-    generation ::  ([DungeonTree]->[DungeonTree]) -> [DungeonTree] -> [Room] -> PureMT -> ([DungeonTree],PureMT)
+    generation ::  (DungeonTree -> Int) -> [DungeonTree] -> [Room] -> PureMT -> ([DungeonTree],PureMT)
     generation f population rooms s =
         (newPop,s2)
       where
@@ -320,25 +327,31 @@ module DemiGen.TreeGen where
       where
         (t,ts) = splitAt 4 p
 
-    foldTournaments ::  ([DungeonTree]->[DungeonTree]) -> [DungeonTree] -> [DungeonTree] -> [Room] -> PureMT -> ([DungeonTree], PureMT)
+    foldTournaments ::  (DungeonTree -> Int) -> [DungeonTree] -> [DungeonTree] -> [Room] -> PureMT -> ([DungeonTree], PureMT)
     foldTournaments f done next rooms s =
         (res ++ done,s2)
       where
         (res, s2) = tournament f next rooms s
 
-    tournament ::  ([DungeonTree]->[DungeonTree]) -> [DungeonTree] -> [Room] -> PureMT -> ([DungeonTree],PureMT)
-    tournament f competitors rooms s = 
+    tournament ::  (DungeonTree -> Int) -> [DungeonTree] -> [Room] -> PureMT -> ([DungeonTree],PureMT)
+    tournament scoreF competitors rooms s = 
         ([first, second, child1, child2],s3)
       where
-        (first:second:_) = f competitors
+        (first:second:_) = (map fst) . reverse $ sortOn snd [(t, scoreF t) | t <- competitors]
         (child1,s2)      = mutate rooms first second s
         (child2,s3)      = mutate rooms second first s2
 
 
-    byRooms :: [DungeonTree] -> [DungeonTree]
-    byRooms trees = reverse $ map fst $ sortOn snd [(t,length g) | t <- trees, let g = treeToGenome t]
+    byRooms :: DungeonTree -> Int
+    byRooms = length . treeToGenome
 
-    
+    targetSize :: Int -> DungeonTree -> Int
+    targetSize max t
+        | l < max   = l
+        | otherwise = 0
+      where
+        l = length $ treeToGenome t 
+
 
 --test outputs
 ---------------------------------------------------------------------------------------------------
@@ -350,11 +363,11 @@ module DemiGen.TreeGen where
     printRawDungeon :: Dungeon -> IO ()
     printRawDungeon d =
         let (minx,miny,maxx,maxy)  = getBounds (M.keys d) (0,0,0,0)
-            newD                   = M.mapKeys (\(x,y) -> (x + abs minx,y + abs miny)) d
+           -- newD                   = M.mapKeys (\(x,y) -> (x + abs minx,y + abs miny)) d
         in
             writePng "dungeonRawOut.png" $ 
             generateImage 
-                (\x y -> printDungeonPixel $ M.findWithDefault Empty (x+minx,y+miny) newD) 
+                (\x y -> printDungeonPixel $ M.findWithDefault Empty (x+minx,y+miny) d) 
                 (maxx + abs minx + 50) (maxy + abs miny + 50)
 
     getBounds :: [CoOrd] -> (Int, Int, Int, Int) -> (Int, Int, Int, Int)
@@ -376,6 +389,6 @@ module DemiGen.TreeGen where
     test = do
         rooms <- allRooms
         s     <- newPureMT
-        let (pop1,s1) = randomTrees 200 rooms 80 6 s
-            (x,   sx) = geneticDungeon 100 byRooms pop1 rooms s1
+        let (pop1,s1) = randomTrees 400 rooms 100 6 s
+            (x,   sx) = geneticDungeon 100 (targetSize 100) pop1 rooms s1
         printRawDungeon $ genomeToDungeon $ treeToGenome x
