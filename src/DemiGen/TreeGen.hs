@@ -1,4 +1,3 @@
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE BangPatterns #-}
 module DemiGen.TreeGen where
     import          DemiGen.Types
@@ -70,7 +69,7 @@ module DemiGen.TreeGen where
         L.map 
             (\(coord, c) -> (f coord, c)) 
             $ doors r
-    
+
     offsetRoom :: Room -> Int -> Int -> Room
     offsetRoom (Room ts ds) ox oy = Room
             (S.map (\ (x,y)   -> (x+ox,y+oy)   ) ts) $
@@ -80,17 +79,14 @@ module DemiGen.TreeGen where
     noCollision d (Room ts _) (ox,oy) = 
         and [isFree d (x+ox,y+oy) | (x,y) <- S.toList ts]
     
-    isFree d c = or
-        [ M.notMember c d
-        , d M.! c /= Occupied
-        ]
+    isFree d c = d M.!? c /= Just Occupied
 
     findValidDoor :: Dungeon -> Room -> Maybe CoOrd
     findValidDoor d (Room _ doors)
         | length valid /= 0 = Just $ fst $ head valid
         | otherwise         = Nothing
       where
-        valid = L.filter (\d -> (snd d) == Open) doors
+        valid = L.filter (\d -> snd d == Open) doors
         
     insertRoom :: Dungeon -> Room -> Dungeon
     insertRoom d r =
@@ -105,12 +101,12 @@ module DemiGen.TreeGen where
         let rotations     = [rotateRoom child rot | rot <- [0..3]]
             offsets       = [offsetRoom (setConn r parent (x,y)) (tx-x) (ty-y) | r <- rotations, ((x,y),_) <- doors r]
         (newD, newChild) <- msum [attemptAttach d r | r <- offsets]        
-        Just (newD, (setConn parent newChild (tx,ty)), newChild)
+        Just (newD, setConn parent newChild (tx,ty), newChild)
 
 
     attemptAttach :: Dungeon -> Room -> Maybe (Dungeon, Room)
     attemptAttach d r 
-        | noCollision d r (0,0) = Just $ (insertRoom d r, r)
+        | noCollision d r (0,0) = Just (insertRoom d r, r)
         | otherwise             = Nothing
 
     setConn :: Room -> Room -> CoOrd -> Room
@@ -221,8 +217,8 @@ module DemiGen.TreeGen where
 
     --delete a leaf
     trim :: [Room] -> DungeonTree -> DungeonTree -> PureMT -> (DungeonTree, PureMT)
-    trim _ _ node = 
-        applyToRandom f node
+    trim _ _ = 
+        applyToRandom f
       where
         f (Leaf _) s = (Null, s)
         f child    s = applyToRandom f child s
@@ -290,8 +286,8 @@ module DemiGen.TreeGen where
     --delete unused doors
     purgeDoors :: [Room] -> [Room]
     purgeDoors [] = []
-    purgeDoors ((Room ts ds):rs) = 
-        (Room ts [d | d <- ds, snd d /= Open]) : purgeDoors rs
+    purgeDoors (Room ts ds:rs) = 
+        Room ts [d | d <- ds, snd d /= Open] : purgeDoors rs
 
     --take a set of rooms and create a Dungeon
     genomeToDungeon :: [Room] -> Dungeon
@@ -304,7 +300,7 @@ module DemiGen.TreeGen where
     geneticDungeon :: Int -> (DungeonTree -> Int) -> [DungeonTree] -> [Room] -> PureMT -> (DungeonTree, PureMT)
     geneticDungeon 1 f !pop _ s = (best, s)
       where
-        (best,_) = head . reverse $ sortOn snd [(t, f t) | t <- pop]
+        (best,_) = last $ sortOn snd [(t, f t) | t <- pop]
 
     geneticDungeon gens f !pop rooms s = trace (show gens) $
         geneticDungeon (gens-1) f nextPop rooms s2
@@ -362,13 +358,12 @@ module DemiGen.TreeGen where
 
     printRawDungeon :: Dungeon -> IO ()
     printRawDungeon d =
-        let (minx,miny,maxx,maxy)  = getBounds (M.keys d) (0,0,0,0)
-           -- newD                   = M.mapKeys (\(x,y) -> (x + abs minx,y + abs miny)) d
-        in
             writePng "dungeonRawOut.png" $ 
             generateImage 
-                (\x y -> printDungeonPixel $ M.findWithDefault Empty (x+minx,y+miny) d) 
-                (maxx + abs minx + 50) (maxy + abs miny + 50)
+                (\x y -> printDungeonPixel $ M.findWithDefault Empty (x+minx-5,y+miny-5) d) 
+                (maxx + abs minx + 10) (maxy + abs miny + 10)
+      where
+        (minx,miny,maxx,maxy)  = getBounds (M.keys d) (-5,-5,0,0)
 
     getBounds :: [CoOrd] -> (Int, Int, Int, Int) -> (Int, Int, Int, Int)
     getBounds [] res = res
@@ -390,5 +385,5 @@ module DemiGen.TreeGen where
         rooms <- allRooms
         s     <- newPureMT
         let (pop1,s1) = randomTrees 400 rooms 100 6 s
-            (x,   sx) = geneticDungeon 100 (targetSize 100) pop1 rooms s1
+            (x,   sx) = geneticDungeon 10 (targetSize 100) pop1 rooms s1
         printRawDungeon $ genomeToDungeon $ treeToGenome x
