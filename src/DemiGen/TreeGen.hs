@@ -265,8 +265,8 @@ module DemiGen.TreeGen where
 
     treeToGenome (Node r size cs) = purgeDoors $
         makeGenome 
-            (insertRoom (generateDungeonGrid 0 0) r) 
-            r cs [] [r]
+            (generateDungeonGrid 0 0)
+            r cs [] []
 
     makeGenome :: Dungeon -> Room -> [DungeonTree] -> [DungeonTree] -> [Room] -> [Room]
     makeGenome d parent ((Leaf r):cs) next rooms = 
