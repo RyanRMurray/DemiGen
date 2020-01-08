@@ -4,8 +4,42 @@ module DemiGen.Types where
     import Codec.Picture.Extra
 
     import Data.Map (Map)
+    import qualified Data.Map as M
     import Data.Heap (MinHeap)
     import Data.Set (Set)
+    import Data.List
+
+    import           System.Random.Mersenne.Pure64
+    import           System.Random.Shuffle
+
+
+--Random selection
+
+    type Choice a = Map Int a
+
+    --take a list of items and their relative frequency and return a randomly selected item and the updated PRNG
+    randomFrom :: [(a,Int)] -> PureMT -> (a,PureMT)
+    randomFrom list s = (choices !! (i `mod` length choices), s2)
+        where
+            choices = concat [replicate n c | (c,n) <-list]
+            (i,s2)  = randomInt s
+    
+    choiceFromList :: [(Int, a)] -> Choice a
+    choiceFromList =
+        foldl (\m (w,c) -> choiceAdd m w c) M.empty 
+
+    choiceAdd :: Choice a -> Int -> a -> Choice a
+    choiceAdd cs weight choice =
+        foldl' (\m (k,v) -> M.insert k v m) cs $ zip [lower..upper] $ cycle [choice]
+      where
+        lower = M.size cs
+        upper = lower + weight - 1
+
+    choose :: Choice a -> PureMT -> (a, PureMT)
+    choose choices seed = 
+        (choices M.! (x `mod` M.size choices), s2)
+      where
+        (x,s2) = randomInt seed
 
 --Simple functions for grid-based processes
 
@@ -22,6 +56,10 @@ module DemiGen.Types where
 
     type TileFreqs = Set (Int, Rational)            --Set of tile indexes with their relative rarity
     type CoOrd = (Int, Int)                         --Simple cartesian integer coordinates
+    
+    (*+) :: CoOrd -> CoOrd -> CoOrd
+    (*+) (x1,y1) (x2,y2) = (x1+x2,y1+y2)
+    
     type Wave = Map CoOrd TileFreqs                 --Un or partially collapsed wavefunction containing a grid of possible tile indexes
     type Grid = Map CoOrd Int                  --Fully collapsed wavefunction containing a grid of tile indexes
     type Neighbor = (CoOrd,CoOrd)                   --Coordinates of a neighboring tile and its relative direction
@@ -81,7 +119,7 @@ module DemiGen.Types where
         (==) Open Open       = True
         (==) _ _             = False
 
-    data Cell = Empty | Occupied | Conn
+    data Cell = Empty | Occupied | Conn | Wall | Floor
         deriving (Show, Eq)
 
     type Dungeon = Map CoOrd Cell

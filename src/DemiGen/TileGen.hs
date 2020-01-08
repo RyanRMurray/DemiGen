@@ -135,7 +135,7 @@ module DemiGen.TileGen where
     collapsePixel rules enablers dir possible =
         S.filter (\(i, _)-> S.member i allowed) possible
         where
-            allowed = S.foldl (\s e -> S.union s (collapsePixel' rules e dir)) S.empty enablers
+            allowed = S.unions [collapsePixel' rules enabler dir | enabler <- S.toList enablers]
 
     collapsePixel' rules enabler dir  =
         M.findWithDefault S.empty (enabler, dir) rules

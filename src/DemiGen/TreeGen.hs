@@ -116,15 +116,8 @@ module DemiGen.TreeGen where
 --random tree generator
 ---------------------------------------------------------------------------------------------------
 
-    --take a list of items and their relative frequency and return a randomly selected item and the updated PRNG
-    randomFrom :: [(a,Int)] -> PureMT -> (a,PureMT)
-    randomFrom list s = (choices !! (i `mod` length choices), s2)
-        where
-            choices = concat [replicate n c | (c,n) <-list]
-            (i,s2)  = randomInt s
-
     --generate the specified number of random trees given a  set of rooms, maximum size and number of children a node can have
-    randomTrees :: Int -> [Room] -> Int -> Int -> PureMT -> ([DungeonTree], PureMT)
+    randomTrees :: Int -> Choice Room -> Int -> Int -> PureMT -> ([DungeonTree], PureMT)
     randomTrees 1 r n m s = 
         ([t],s2)
       where
@@ -138,14 +131,18 @@ module DemiGen.TreeGen where
 
 
     --generate a random tree given a  set of rooms, maximum size and number of children a node can have
-    randomTree :: [Room] -> Int -> Int -> PureMT -> (DungeonTree, PureMT)
-    randomTree rooms 1 _ seed = randomFrom [(Leaf r,1) | r <- rooms] seed
+    randomTree :: Choice Room -> Int -> Int -> PureMT -> (DungeonTree, PureMT)
+    randomTree rooms 1 _ seed = 
+        (Leaf r, s2)
+      where
+        (r, s2) = choose rooms seed
+
     randomTree rooms budget maxChildren seed =
         let (seedRes,  seed2) = randomInt seed
             childNum          = 1 + seedRes `mod` maxChildren 
             (cBudgets, seed3) = distributeBudget (budget-1) childNum ([], seed2)
             (children, seed4) = randomChildren rooms cBudgets maxChildren ([], seed3)
-            (pRoom, seed5)    = randomFrom [(r,1)| r <- rooms] seed4
+            (pRoom, seed5)    = choose rooms seed4
         in
             (Node pRoom budget children, seed5)
 
@@ -160,7 +157,7 @@ module DemiGen.TreeGen where
         in
             distributeBudget remaining (recipients - 1) (newDis:distributed, seed2)
 
-    randomChildren :: [Room] -> [Int] -> Int -> ([DungeonTree], PureMT) -> ([DungeonTree], PureMT)
+    randomChildren :: Choice Room -> [Int] -> Int -> ([DungeonTree], PureMT) -> ([DungeonTree], PureMT)
     randomChildren _ [] _ result = result
     randomChildren rooms (c:cs) maxChildren (res, seed) =
         randomChildren rooms cs maxChildren (newC:res, seed2)
@@ -302,7 +299,7 @@ module DemiGen.TreeGen where
       where
         (best,_) = last $ sortOn snd [(t, f t) | t <- pop]
 
-    geneticDungeon gens f !pop rooms s = trace (show gens) $
+    geneticDungeon gens f !pop rooms s =
         geneticDungeon (gens-1) f nextPop rooms s2
       where
         (nextPop, s2) = generation f pop rooms s
@@ -348,6 +345,42 @@ module DemiGen.TreeGen where
       where
         l = length $ treeToGenome t 
 
+--Prepare dungeon for room content generation
+---------------------------------------------------------------------------------------------------
+
+    --return a list of directions that are blocked in the dungeon. Directions are in eight
+    --cardinal directions, with "north" being 1, NE being 2, ect.
+    findBlocked :: Dungeon -> CoOrd -> [Int]
+    findBlocked dg at =
+        map fst
+        $ filter (\(_,c) -> dg M.! (at *+ c) == Empty)
+        $ zip [1..]
+              [(0,-1),(1,-1),(1,0),(1,1),(0,1),(-1,1),(-1,0),(-1,-1)]
+
+    --enlarge dungeon, finding internal and external cells
+    placeWallsAt :: Dungeon -> Dungeon -> CoOrd -> Dungeon
+    placeWallsAt bigger input at 
+        | input M.! at == Empty = M.union bigger $ M.mapKeys ((*+) at) segment
+        | otherwise             = M.union bigger $ M.mapKeys ((*+) at) addedSeg 
+      where
+        segment = M.fromList $ zip [(x,y) | x <- [0..3], y <- [0..3]] $ cycle [Floor]
+        wDirs = findBlocked input at
+        toAdd = concat $ map walls wDirs
+        addedSeg = foldl (\m c -> M.insert c Wall m) segment toAdd
+
+    walls 1 = [(x,0) | x <- [0..3]]
+    walls 3 = [(3,y) | y <- [0..3]]
+    walls 5 = [(x,3) | x <- [0..3]]
+    walls 7 = [(0,y) | y <- [0..3]]
+    walls 2 = [(3,0)]
+    walls 4 = [(3,3)]
+    walls 6 = [(0,3)]
+    walls 8 = [(0,0)]
+
+
+    embiggenDungeon :: Dungeon -> Dungeon
+    embiggenDungeon input = foldl' (\o c -> placeWallsAt o input c) M.empty $ M.keys input
+    
 
 --test outputs
 ---------------------------------------------------------------------------------------------------
@@ -380,10 +413,13 @@ module DemiGen.TreeGen where
     printDungeonPixel Conn = doorPixel
     printDungeonPixel Occupied = tilePixel
     printDungeonPixel Empty = PixelRGB8 255 255 255
+    printDungeonPixel Wall = PixelRGB8 255 255 255
+    printDungeonPixel Floor = PixelRGB8 100 100 100
 
     test = do
         rooms <- allRooms
         s     <- newPureMT
-        let (pop1,s1) = randomTrees 400 rooms 100 6 s
+        let crooms    = choiceFromList $ zip [1,1..] rooms 
+            (pop1,s1) = randomTrees 400 crooms 100 6 s
             (x,   sx) = geneticDungeon 10 (targetSize 100) pop1 rooms s1
-        printRawDungeon $ genomeToDungeon $ treeToGenome x
+        printRawDungeon $ embiggenDungeon $ genomeToDungeon $ treeToGenome x
