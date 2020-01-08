@@ -41,8 +41,11 @@ module DemiGen.TreeGen where
     --Parse an image to create a room object
     getRoomData :: TileImg -> Room
     getRoomData input = Room
-        (S.fromList $     getTargetPixels input tilePixel) $ 
-        [(d, Open) | d <- getTargetPixels input doorPixel]
+        (S.fromList $ floor ++ doors) $ 
+        [(d, Open) | d <- doors]
+      where
+        floor = getTargetPixels input tilePixel
+        doors = getTargetPixels input doorPixel
 
     --Get a list of the coordinates of the specified pixel colour
     getTargetPixels :: TileImg -> PixelRGB8 -> [CoOrd]
@@ -260,7 +263,7 @@ module DemiGen.TreeGen where
     treeToGenome :: DungeonTree -> [Room]
     treeToGenome (Leaf (Room ts _)) = [Room ts []]
 
-    treeToGenome (Node r size cs) = purgeDoors $
+    treeToGenome (Node r size cs) = purgeDoors $ 
         makeGenome 
             (generateDungeonGrid 0 0)
             r cs [] []
@@ -284,7 +287,10 @@ module DemiGen.TreeGen where
     purgeDoors :: [Room] -> [Room]
     purgeDoors [] = []
     purgeDoors (Room ts ds:rs) = 
-        Room ts [d | d <- ds, snd d /= Open] : purgeDoors rs
+        Room (S.filter (\t -> notElem t oTiles) ts) ( ds \\ opens) : purgeDoors rs
+      where
+        opens = filter (\(_,c) -> c == Open) ds
+        oTiles = map fst opens
 
     --take a set of rooms and create a Dungeon
     genomeToDungeon :: [Room] -> Dungeon
@@ -348,39 +354,61 @@ module DemiGen.TreeGen where
 --Prepare dungeon for room content generation
 ---------------------------------------------------------------------------------------------------
 
-    --return a list of directions that are blocked in the dungeon. Directions are in eight
-    --cardinal directions, with "north" being 1, NE being 2, ect.
-    findBlocked :: Dungeon -> CoOrd -> [Int]
-    findBlocked dg at =
-        map fst
-        $ filter (\(_,c) -> dg M.! (at *+ c) == Empty)
-        $ zip [1..]
-              [(0,-1),(1,-1),(1,0),(1,1),(0,1),(-1,1),(-1,0),(-1,-1)]
+    side :: Int -> [CoOrd]
+    side 1 = [(x,0) | x <- [0..3]]
+    side 3 = [(3,y) | y <- [0..3]]
+    side 5 = [(x,3) | x <- [0..3]]
+    side 7 = [(0,y) | y <- [0..3]]
+    side 2 = [(3,0)]
+    side 4 = [(3,3)]
+    side 6 = [(0,3)]
+    side 8 = [(0,0)]
 
-    --enlarge dungeon, finding internal and external cells
-    placeWallsAt :: Dungeon -> Dungeon -> CoOrd -> Dungeon
-    placeWallsAt bigger input at 
-        | input M.! at == Empty = M.union bigger $ M.mapKeys ((*+) at) segment
-        | otherwise             = M.union bigger $ M.mapKeys ((*+) at) addedSeg 
+    baseSeg :: Dungeon
+    baseSeg = M.fromList [((x,y),Floor) | x <- [0..3], y<- [0..3]]
+
+    addWallsToSeg :: Room -> CoOrd -> Dungeon
+    addWallsToSeg (Room tiles _) at =
+        M.mapKeys (\c -> (.+) (at .* 4) c)
+        $ foldl' (\s c -> M.insert c Wall s) baseSeg toAdd
       where
-        segment = M.fromList $ zip [(x,y) | x <- [0..3], y <- [0..3]] $ cycle [Floor]
-        wDirs = findBlocked input at
-        toAdd = concat $ map walls wDirs
-        addedSeg = foldl (\m c -> M.insert c Wall m) segment toAdd
+        toAdd = concat 
+            $ map (side . fst) 
+            $ filter (\(_,c) -> S.notMember (at .+ c) tiles)
+            $ zip [1..] $ [(0,-1),(1,-1),(1,0),(1,1),(0,1),(-1,1),(-1,0),(-1,-1)]
 
-    walls 1 = [(x,0) | x <- [0..3]]
-    walls 3 = [(3,y) | y <- [0..3]]
-    walls 5 = [(x,3) | x <- [0..3]]
-    walls 7 = [(0,y) | y <- [0..3]]
-    walls 2 = [(3,0)]
-    walls 4 = [(3,3)]
-    walls 6 = [(0,3)]
-    walls 8 = [(0,0)]
+    addEmbiggenedRoom :: Dungeon -> Room -> Dungeon
+    addEmbiggenedRoom dg r@(Room tiles _) =
+        foldl' (\d s -> M.union s d) dg
+        $ map (addWallsToSeg r) 
+        $ S.toList tiles
 
+    unsealDoor :: Dungeon -> CoOrd -> Dungeon
+    unsealDoor small at =
+        M.mapKeys (\c -> (.+) (at .* 4) c)
+        $ foldl' (\s c -> M.insert c Wall s) baseSeg toAdd
+      where
+        toAdd = concat 
+            $ map (side . fst) 
+            $ filter (\(_,c) -> M.findWithDefault Empty (c .+ at) small == Empty)
+            $ zip [1..] $ [(0,-1),(1,-1),(1,0),(1,1),(0,1),(-1,1),(-1,0),(-1,-1)]
 
-    embiggenDungeon :: Dungeon -> Dungeon
-    embiggenDungeon input = foldl' (\o c -> placeWallsAt o input c) M.empty $ M.keys input
-    
+    unsealDoors :: Dungeon -> Dungeon -> Dungeon
+    unsealDoors sealed small =
+        foldl' (\d s -> M.union s d) sealed
+        $ map (unsealDoor small) doors
+      where
+        doors   = M.keys $ M.filter (== Conn) small
+        
+
+    embiggenDungeon :: DungeonTree -> Dungeon
+    embiggenDungeon tree =
+        unsealDoors sealed dungeon
+      where
+        genome  = treeToGenome tree
+        dungeon = genomeToDungeon genome
+        sealed  = foldl' (\d r -> addEmbiggenedRoom d r) M.empty genome
+
 
 --test outputs
 ---------------------------------------------------------------------------------------------------
@@ -413,7 +441,7 @@ module DemiGen.TreeGen where
     printDungeonPixel Conn = doorPixel
     printDungeonPixel Occupied = tilePixel
     printDungeonPixel Empty = PixelRGB8 255 255 255
-    printDungeonPixel Wall = PixelRGB8 255 255 255
+    printDungeonPixel Wall = tilePixel
     printDungeonPixel Floor = PixelRGB8 100 100 100
 
     test = do
@@ -422,4 +450,4 @@ module DemiGen.TreeGen where
         let crooms    = choiceFromList $ zip [1,1..] rooms 
             (pop1,s1) = randomTrees 400 crooms 100 6 s
             (x,   sx) = geneticDungeon 10 (targetSize 100) pop1 rooms s1
-        printRawDungeon $ embiggenDungeon $ genomeToDungeon $ treeToGenome x
+        printRawDungeon $ embiggenDungeon x

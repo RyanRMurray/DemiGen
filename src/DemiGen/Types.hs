@@ -57,8 +57,11 @@ module DemiGen.Types where
     type TileFreqs = Set (Int, Rational)            --Set of tile indexes with their relative rarity
     type CoOrd = (Int, Int)                         --Simple cartesian integer coordinates
     
-    (*+) :: CoOrd -> CoOrd -> CoOrd
-    (*+) (x1,y1) (x2,y2) = (x1+x2,y1+y2)
+    (.+) :: CoOrd -> CoOrd -> CoOrd
+    (.+) (x1,y1) (x2,y2) = (x1+x2,y1+y2)
+
+    (.*) :: CoOrd -> Int -> CoOrd
+    (.*) (x,y) m = (m*x,m*y)
     
     type Wave = Map CoOrd TileFreqs                 --Un or partially collapsed wavefunction containing a grid of possible tile indexes
     type Grid = Map CoOrd Int                  --Fully collapsed wavefunction containing a grid of tile indexes
