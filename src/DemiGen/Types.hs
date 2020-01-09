@@ -50,6 +50,16 @@ module DemiGen.Types where
     getGrid x y = concat [getGrid' x row| row <- [0..y]]
     getGrid' x row = [(col,row) | col <- [0..x]]
 
+    getBounds :: [CoOrd] -> (Int, Int, Int, Int) -> (Int, Int, Int, Int)
+    getBounds [] res = res
+    getBounds ((x,y):cs) (minx,miny,maxx,maxy) =
+        getBounds cs (nminx, nminy, nmaxx, nmaxy)
+      where
+        nminx = min x minx
+        nmaxx = max x maxx
+        nminy = min y miny
+        nmaxy = max y maxy
+
 --Types and globals for TileGen
     type Pix = PixelRGB8
     type TileImg = Image Pix                        --Type of image to import and export

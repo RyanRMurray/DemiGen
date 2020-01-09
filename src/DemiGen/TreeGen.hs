@@ -426,17 +426,6 @@ module DemiGen.TreeGen where
       where
         (minx,miny,maxx,maxy)  = getBounds (M.keys d) (-5,-5,0,0)
 
-    getBounds :: [CoOrd] -> (Int, Int, Int, Int) -> (Int, Int, Int, Int)
-    getBounds [] res = res
-    getBounds ((x,y):cs) (minx,miny,maxx,maxy) =
-        getBounds cs (nminx, nminy, nmaxx, nmaxy)
-      where
-        nminx = min x minx
-        nmaxx = max x maxx
-        nminy = min y miny
-        nmaxy = max y maxy
-
-
     printDungeonPixel :: Cell -> PixelRGB8
     printDungeonPixel Conn = doorPixel
     printDungeonPixel Occupied = tilePixel

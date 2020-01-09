@@ -79,17 +79,20 @@ module DemiGen.TileGen where
     collapseWave rules w cw h seed
         | M.keys w == [] = Right cw
         | otherwise = do
-            let (nCoOrd, nH)  = trace (show $ M.size cw) selectNextCoOrd w h
-            (nTile, nSeed)    <- observePixel (w M.! nCoOrd) seed nCoOrd
-            let nCw           = M.insert nCoOrd nTile cw
-                (nW, nH2)     = propagate rules [nCoOrd] (M.insert nCoOrd (S.singleton (nTile,1)) w) nH
-            collapseWave rules (M.delete nCoOrd nW) nCw nH2 nSeed
+            case selectNextCoOrd w h of
+                Left () -> Right cw
+                Right (nCoOrd, nH) -> do
+                    (nTile, nSeed)    <- observePixel (w M.! nCoOrd) seed nCoOrd
+                    let nCw           = M.insert nCoOrd nTile cw
+                        (nW, nH2)     = propagate rules [nCoOrd] (M.insert nCoOrd (S.singleton (nTile,1)) w) nH
+                    collapseWave rules (M.delete nCoOrd nW) nCw nH2 nSeed
 
     --select next coordinate, the one with lowest entropy
-    selectNextCoOrd :: Wave -> EntropyHeap -> (CoOrd, EntropyHeap)
+    selectNextCoOrd :: Wave -> EntropyHeap -> Either () (CoOrd, EntropyHeap) 
     selectNextCoOrd w h
-            | M.member c w = (c,nH)
-            | otherwise    = selectNextCoOrd w nH
+            | H.size h == 0  = Left ()
+            | M.member c w   = Right (c,nH)
+            | otherwise      = selectNextCoOrd w nH
            where c  = snd $ head $ H.take 1 h
                  nH = H.drop 1 h
 
@@ -148,9 +151,13 @@ module DemiGen.TileGen where
         M.fromList [(c, indexPix $ ts !! i) | (c,i) <- M.toList cw]
 
 
-    generateOutputImage :: Map CoOrd Pix -> Int -> Int -> TileImg
-    generateOutputImage ps x y =
-        generateImage (\x y -> M.findWithDefault defaultTilePixel (x,y) ps) x y
+    generateOutputImage :: Map CoOrd Pix -> TileImg
+    generateOutputImage ps =
+        generateImage 
+            (\x y -> M.findWithDefault defaultTilePixel (x,y) ps) 
+            (maxx + abs minx + 10) (maxy + abs miny + 10)
+      where
+        (minx,miny,maxx,maxy)  = getBounds (M.keys ps) (-5,-5,0,0)
 
 --Top level functions for specifying tile generation parameters
 --------------------------------------------------------------------------------------------------------
@@ -191,11 +198,11 @@ module DemiGen.TileGen where
         --writePng "testout1.png" $ generateOutputImage (generatePixelList c1 t1) 10 10
         --print "Done"
         print "Generating 100x100 'sewer' grid..."
-        writePng "testout2.png" $ generateOutputImage (generatePixelList c2 t2) 100 100
+        writePng "testout2.png" $ generateOutputImage (generatePixelList c2 t2)
         print "Done"
         print "Generating 100x100 'Dungeon' grid..."
-        writePng "testout3.png" $ generateOutputImage (generatePixelList c3 t3) 100 100
+        writePng "testout3.png" $ generateOutputImage (generatePixelList c3 t3)
         print "Done"
         print "Generating 200x200 'Dungeon' grid..."
-        writePng "testout4.png" $ generateOutputImage (generatePixelList c4 t4) 200 200
+        writePng "testout4.png" $ generateOutputImage (generatePixelList c4 t4)
         print "Done"
