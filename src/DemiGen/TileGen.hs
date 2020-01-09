@@ -13,8 +13,8 @@ module DemiGen.TileGen where
     import           Data.Ord
     import Debug.Trace
 
-    import           System.Random
-    import           Control.Monad.Random as Rand
+    import           System.Random.Mersenne.Pure64
+    import           System.Random.Shuffle
 
     import           Codec.Picture
     import           Codec.Picture.Extra
@@ -38,12 +38,9 @@ module DemiGen.TileGen where
     --take in the input, return the frequency of unique tiles
     getTileFrequencies :: [TileImg] -> [TileImg] -> TileFreqs
     getTileFrequencies pattern ts =
-        let counts = getTileFrequencies' pattern ts
-            total  = sum $ S.map snd counts
-        in
-            S.map (\(i,w)-> (i, w/total)) counts
-
-    getTileFrequencies' pattern ts = S.fromList $ M.toList $ foldl (\m t -> M.insertWith (+) (fromJust $ elemIndex t ts) 1.0 m) M.empty pattern
+        S.fromList 
+        $ M.toList 
+        $ foldl (\m t -> M.insertWith (+) (fromJust $ elemIndex t ts) 1 m) M.empty pattern
 
     --take a set of (unique) tiles and determine which can be overlapped as neighbors
     processAdjacencyRules :: Int -> [TileImg] -> AdjRules
@@ -78,14 +75,14 @@ module DemiGen.TileGen where
 --------------------------------------------------------------------------------------------------------
 
     --Core wave function collapse process. Loops until the Wave has been observed entirely, or a contradiction
-    collapseWave :: AdjRules -> Wave -> Grid -> EntropyHeap -> StdGen -> Either StdGen Grid
+    collapseWave :: AdjRules -> Wave -> Grid -> EntropyHeap -> PureMT -> Either PureMT Grid
     collapseWave rules w cw h seed
         | M.keys w == [] = Right cw
         | otherwise = do
-            let (nCoOrd, nH)  = selectNextCoOrd w h
+            let (nCoOrd, nH)  = trace (show $ M.size cw) selectNextCoOrd w h
             (nTile, nSeed)    <- observePixel (w M.! nCoOrd) seed nCoOrd
             let nCw           = M.insert nCoOrd nTile cw
-                (nW, nH2)     = propagate rules [nCoOrd] (M.insert nCoOrd (S.singleton (nTile,1.0)) w) nH
+                (nW, nH2)     = propagate rules [nCoOrd] (M.insert nCoOrd (S.singleton (nTile,1)) w) nH
             collapseWave rules (M.delete nCoOrd nW) nCw nH2 nSeed
 
     --select next coordinate, the one with lowest entropy
@@ -97,10 +94,10 @@ module DemiGen.TileGen where
                  nH = H.drop 1 h
 
     --Collapse the probability space of a cell to a single tile
-    observePixel :: TileFreqs -> StdGen -> CoOrd -> Either StdGen (Int, StdGen)
+    observePixel :: TileFreqs -> PureMT -> CoOrd -> Either PureMT (Int, PureMT)
     observePixel fs seed coord
         | S.size fs == 0 = Left seed
-        | otherwise      = Right $ Rand.runRand (Rand.fromList $ S.toList $ fs) seed
+        | otherwise      = Right $ randomFrom (S.toList fs) seed
 
     --Collapse probability space of connected cells based on adjacency rules. If a cell has no possible tiles,
     --return a contradiction.
@@ -123,15 +120,14 @@ module DemiGen.TileGen where
               newHeap        = H.insert (getEntropy collapsedPixel, n) h
               newLength      = length collapsedPixel
 
-
-    getEntropy :: Set (Int, Rational) -> Rational
-    getEntropy weights = toRational $ - sum [realToFrac w * logBase 2 (realToFrac w :: Float)| (_, w) <- S.toList weights]
+    getEntropy :: Set (Int, Int) -> Double
+    getEntropy weights =  sum [dw * logBase 2 dw | (_, w) <- S.toList weights, let dw = fromIntegral w]
 
     getNeighbors :: Wave -> CoOrd -> [Neighbor]
     getNeighbors w (x,y) =
         L.filter (\(d,n) -> M.member n w) [((dx,dy),(x+dx,y+dy)) | (dx,dy) <- dirs]
 
-    collapsePixel :: AdjRules -> Set Int -> CoOrd -> Set (Int, Rational) -> Set (Int, Rational)
+    collapsePixel :: AdjRules -> Set Int -> CoOrd -> Set (Int, Int) -> Set (Int, Int)
     collapsePixel rules enablers dir possible =
         S.filter (\(i, _)-> S.member i allowed) possible
         where
@@ -165,18 +161,18 @@ module DemiGen.TileGen where
         coords
 
     --generate an image with these parameters. WARNING; NOT GUARUNTEED TO HALT.
-    generateUntilValid :: AdjRules -> Wave -> Grid -> EntropyHeap -> StdGen -> Grid
+    generateUntilValid :: AdjRules -> Wave -> Grid -> EntropyHeap -> PureMT -> Grid
     generateUntilValid pairs w m h s =
         case collapseWave pairs w m h s of
             Left ns -> generateUntilValid pairs w m h ns
             Right cw -> cw
 
-    generateFromImage :: TileImg -> Int -> [Transform] -> [CoOrd] -> StdGen -> ([TileImg], Grid)
+    generateFromImage :: TileImg -> Int -> [Transform] -> [CoOrd] -> PureMT -> ([TileImg], Grid)
     generateFromImage input tileSize transformations shape seed =
         let (tiles, freqs) = getTileData input tileSize transformations
             rules          = processAdjacencyRules tileSize tiles
             start          = fst $ maximumBy (comparing snd) [((x,y), x*y) | (x,y) <- shape]
-            heap           = H.singleton (0.0, start)
+            heap           = H.singleton (0, start)
             startWave      = generateStartingWave shape freqs
             collapsed      = generateUntilValid rules startWave M.empty heap seed
         in
@@ -188,9 +184,9 @@ module DemiGen.TileGen where
         Right y <- readPng "Dungeon.png"
         let stream = convertRGB8 x
             dungeon = convertRGB8 y
-            (t2, c2) = generateFromImage stream 3 withRotations (getGrid 99 99) (mkStdGen 4201)
-            (t3, c3) = generateFromImage dungeon 3 withRotations (getGrid 100 100) (mkStdGen 3333)
-            (t4, c4) = generateFromImage dungeon 3 withReflections (getGrid 200 200) (mkStdGen 41411)
+            (t2, c2) = generateFromImage stream 3 withRotations (getGrid 99 99) (pureMT 69)
+            (t3, c3) = generateFromImage dungeon 3 withRotations (getGrid 100 100) (pureMT 420)
+            (t4, c4) = generateFromImage dungeon 3 withReflections (getGrid 200 200) (pureMT 24)
         --print "Generating 10x10 'Stream' grid..."
         --writePng "testout1.png" $ generateOutputImage (generatePixelList c1 t1) 10 10
         --print "Done"
