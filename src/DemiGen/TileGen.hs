@@ -43,21 +43,20 @@ module DemiGen.TileGen where
     getTiles :: Int -> TileImg -> [(TileImg,CoOrd)]
     getTiles n img =
         [ (crop x y n n img,(x,y))
-        | x <- [0,n.. imageWidth img]
-        , y <- [0,n.. imageHeight img]
+        | x <- [0,n.. imageWidth img - 1]
+        , y <- [0,n.. imageHeight img - 1]
         ]
 
     --get frequency of appearances by unique tiles
     getTileFrequencies :: [TileImg] -> [TileImg] -> TileFreqs
     getTileFrequencies unique tiles =
-        S.fromList
-        $ M.toList
-        $ foldl' (\m t -> M.insertWith (+) (fromJust $ elemIndex t unique) 1 m) M.empty tiles
+        foldl' (\m t -> M.insertWith (+) (fromJust $ elemIndex t unique) 1 m) M.empty tiles
 
     --find neighbours to the target tile in the target direction
     getNeighboursAt :: TileImg -> Int -> [TileImg] -> TileImg -> CoOrd -> Set Int
     getNeighboursAt img n unique target dir =
-        foldl' (\s c -> S.insert (pickNeighbour dir c) s) S.empty
+        S.delete (-1)
+        $ foldl' (\s c -> S.insert (pickNeighbour dir c) s) S.empty
         $ [c | (t,c) <- getTiles n img, t == target]
       where
         pickNeighbour (0,-1) (x,y) = if (y>0)                 then fromJust $ elemIndex (crop x (y-n) n n img) unique else -1
@@ -91,7 +90,7 @@ module DemiGen.TileGen where
 --wave initialising functions
 ---------------------------------------------------------------------------------------------------
 
-    generateStartingWave :: [CoOrd] -> TileFreqs -> Wave
+    generateStartingWave :: [CoOrd] -> Set Int -> Wave
     generateStartingWave shape freqs = foldl' (\m c -> M.insert c freqs m) M.empty shape
 
 
@@ -100,16 +99,79 @@ module DemiGen.TileGen where
 
     selectNextCoOrd :: WaveFunction -> PureMT -> Either PureMT (CoOrd, WaveFunction)
     selectNextCoOrd wf@WaveFunction{..} s
-        | H.size heap == 0 = Left s
-        | M.member c input = Right (c, wf)
+        | H.null heap      = Left s
+        | M.member c input = Right (c, drop1H wf)
         | otherwise        = selectNextCoOrd (drop1H wf) s
       where
         c = snd . head $ H.take 1 heap
 
+    observePixel :: Rules -> WaveFunction -> PureMT -> CoOrd -> Either PureMT (WaveFunction, PureMT)
+    observePixel Rules{..} WaveFunction{..} s at 
+        | length possible == 0 = Left s
+        | otherwise            = Right (observedWF, s2)
+      where
+        possible       = input M.! at
+        weighted       = foldl' (\w p -> (p,frequencies M.! p) : w) [] possible
+        (selected, s2) = randomFrom weighted s
+        observedWF     = WaveFunction (M.insert at (S.singleton selected) input) (M.insert at selected output) heap
+ 
+    getNeighbours :: WaveFunction -> CoOrd -> Set (CoOrd, CoOrd)
+    getNeighbours WaveFunction{..} at = S.fromList
+        [ (n,d) 
+        | d <- dirs
+        , let n = at .+ d
+        , M.member n input, M.notMember n output
+        ]
+    
+    collapsePixel :: Rules -> (WaveFunction, Set CoOrd) -> CoOrd -> CoOrd -> Set Int -> (WaveFunction, Set CoOrd)
+    collapsePixel Rules{..} (wf@WaveFunction{..}, updated) at from enablers
+        | target == possible = (wf, updated)
+        | otherwise          = (collapsed, S.insert at updated)
+      where
+        target    = input M.! at
+        valid     = S.foldl' (\s ti -> S.union s $ adjacency M.! (ti, from)) S.empty enablers
+        possible  = S.intersection target valid
+        collapsed = WaveFunction (M.insert at possible input) output heap
 
-    collapse :: Rules -> WaveFunction -> PureMT -> Either PureMT Grid
-    collapse rules@Rules{..} wf@WaveFunction{..} s
-        | M.size input == 0 = Right output
-        | otherwise         = do
+    collapseNeighbours :: Rules -> (WaveFunction, Set CoOrd) -> CoOrd -> (WaveFunction, Set CoOrd)
+    collapseNeighbours rules (wf@WaveFunction{..},updated) from =
+        S.foldl' (\w (at, d) -> collapsePixel rules w at d enablers) (wf,updated) $ getNeighbours wf from
+      where
+          enablers = input M.! from
+
+    getEntropy :: TileFreqs -> Set Int -> Double
+    getEntropy weights valid = sum [dw * logBase 2 dw | v <- S.toList valid, let dw = fromIntegral $ weights M.! v]
+
+    propagate :: Rules -> WaveFunction -> Set CoOrd -> Set CoOrd -> WaveFunction
+    propagate rules@Rules{..} wf@WaveFunction{..} todo updated
+        | S.null todo = settleWave rules wf updated
+        | otherwise   = propagate rules collapsed newUpdated $ S.union updated newUpdated
+      where
+        (collapsed, newUpdated) = S.foldl' (\w n -> collapseNeighbours rules w n) (wf, S.empty) todo
+
+    --get the entrophies of all updated tiles
+    settleWave :: Rules -> WaveFunction -> Set CoOrd -> WaveFunction
+    settleWave Rules{..} WaveFunction{..} updated =
+        WaveFunction input output
+        $ foldl'   (\h (u,e) -> H.insert (u,e) h)               heap 
+        $ map      (\(u, vs) -> (getEntropy frequencies vs, u)) 
+        $ S.foldl' (\l u     -> (u, input M.! u) : l)           [] updated
+
+    deleteObserved :: WaveFunction -> CoOrd -> WaveFunction
+    deleteObserved WaveFunction{..} at = WaveFunction (M.delete at input) output heap
+
+    collapseWave :: Rules -> WaveFunction -> PureMT -> Either PureMT Grid
+    collapseWave rules@Rules{..} wf s
+        | (M.size $ input wf) == 0 = Right $ output wf
+        | otherwise               = do
             (next, wf1) <- selectNextCoOrd wf s
-            undefined
+            (wf2,s2)    <- observePixel rules wf1 s next
+            let settledWave = propagate rules wf2 (S.singleton next) S.empty
+            trace (show $ M.size $ input wf) $ collapseWave rules (deleteObserved settledWave next) s2
+
+    generateUntilValid :: Rules -> WaveFunction -> PureMT -> Grid
+    generateUntilValid r w s =
+        case collapseWave r w s of
+            Left sn -> generateUntilValid r w sn
+            Right g -> g
+

@@ -64,7 +64,7 @@ module DemiGen.Types where
     type Pix = PixelRGB8
     type TileImg = Image Pix                        --Type of image to import and export
 
-    type TileFreqs = Set (Int, Int)            --Set of tile indexes with their relative rarity
+    type TileFreqs = Map Int Int           --Set of tile indexes with their relative rarity
     type CoOrd = (Int, Int)                         --Simple cartesian integer coordinates
     
     (.+) :: CoOrd -> CoOrd -> CoOrd
@@ -73,7 +73,7 @@ module DemiGen.Types where
     (.*) :: CoOrd -> Int -> CoOrd
     (.*) (x,y) m = (m*x,m*y)
     
-    type Wave = Map CoOrd TileFreqs                 --Un or partially collapsed wavefunction containing a grid of possible tile indexes
+    type Wave = Map CoOrd (Set Int)                 --Un or partially collapsed wavefunction containing a grid of possible tile indexes
     type Grid = Map CoOrd Int                  --Fully collapsed wavefunction containing a grid of tile indexes
     type Neighbor = (CoOrd,CoOrd)                   --Coordinates of a neighboring tile and its relative direction
     type EntropyHeap = MinHeap (Double, CoOrd)    --Heap listing partially collapsed cells by their relative entropy
