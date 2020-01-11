@@ -8,6 +8,7 @@ module DemiGen.TileGen where
     import qualified Data.Map as M
     import qualified Data.Heap as H
     import qualified Data.Set as S
+    import qualified Data.Heap as H
     import           Data.Map (Map)
     import           Data.Heap (MinHeap)
     import           Data.Set (Set)
@@ -167,7 +168,7 @@ module DemiGen.TileGen where
             (next, wf1) <- selectNextCoOrd wf s
             (wf2,s2)    <- observePixel rules wf1 s next
             let settledWave = propagate rules wf2 (S.singleton next) S.empty
-            trace (show $ M.size $ input wf) $ collapseWave rules (deleteObserved settledWave next) s2
+            collapseWave rules (deleteObserved settledWave next) s2
 
     generateUntilValid :: Rules -> WaveFunction -> PureMT -> Grid
     generateUntilValid r w s =
