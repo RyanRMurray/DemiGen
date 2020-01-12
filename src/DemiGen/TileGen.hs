@@ -23,7 +23,7 @@ module DemiGen.TileGen where
 
 
     data Rules = Rules
-        { tiles       :: [TileImg]
+        { utiles       :: [TileImg]
         , frequencies :: TileFreqs
         , adjacency   :: Map (Int, CoOrd) (Set Int)
         }
@@ -170,9 +170,27 @@ module DemiGen.TileGen where
             let settledWave = propagate rules wf2 (S.singleton next) S.empty
             collapseWave rules (deleteObserved settledWave next) s2
 
+--misc in/out functions
+---------------------------------------------------------------------------------------------------
+
     generateUntilValid :: Rules -> WaveFunction -> PureMT -> Grid
     generateUntilValid r w s =
         case collapseWave r w s of
             Left sn -> generateUntilValid r w sn
             Right g -> g
+
+    defaultTile :: Int -> TileImg
+    defaultTile n = generateImage defaultTilePixel n n
+
+    makeImage :: Rules -> Grid -> Int -> TileImg
+    makeImage Rules{..} collapsed n =
+        below [generateRow minx maxx yy | yy <- [miny..maxy]]
+      where
+        (minx,miny,maxx,maxy) = getBounds (M.keys collapsed) (-5,-5,5,5)
+        generateRow minx maxx y = beside 
+            [ case collapsed M.!? (xx,y) of
+                Just r -> utiles !! r
+                Nothing -> defaultTile n 
+            | xx <- [minx..maxx]
+            ]
 

@@ -80,7 +80,7 @@ module DemiGen.Types where
 
     type Transform = TileImg -> TileImg             --Transformations for enriching input tile samples
 
-    defaultTilePixel = PixelRGB8 255 0 127
+    defaultTilePixel _ _ = PixelRGB8 255 0 127
 
     --Options for enriching input tile data
     noTransform :: Transform
