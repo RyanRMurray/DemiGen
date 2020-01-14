@@ -22,13 +22,13 @@ module Main where
     main = do
         rooms <- allRooms
         s     <- newPureMT
-        Right input <- readPng "assets/sources/test01.png"
+        Right input <- readPng "./assets/sources/sewer.png"
         let crooms         = choiceFromList $ zip [1,1..] rooms
-            (pop1, s1)     = randomTrees 400 crooms 100 6 s
-            (dt,    s2)    = geneticDungeon 10 (targetSize 100) pop1 rooms s1
+            (pop1, s1)     = randomTrees 100 crooms 10 6 s
+            (dt,    s2)    = geneticDungeon 10 (targetSize 20) pop1 rooms s1
             dg             = embiggenDungeon dt
             sections       = getBiomes dg
-            rules          = parseRules (convertRGB8 input) 3 withRotations
+            rules          = parseRules (convertRGB8 input) 3 []
             tis            = [0..(length $ utiles rules) - 1]
             baseWave       = generateStartingWave (M.keys dg) $ S.fromList tis
             wave           = 

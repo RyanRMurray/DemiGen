@@ -176,7 +176,7 @@ module DemiGen.TileGen where
     generateUntilValid :: Rules -> WaveFunction -> PureMT -> Grid
     generateUntilValid r w s =
         case collapseWave r w s of
-            Left sn -> generateUntilValid r w sn
+            Left sn -> trace ("failed") $ generateUntilValid r w sn
             Right g -> g
 
     defaultTile :: Int -> TileImg
