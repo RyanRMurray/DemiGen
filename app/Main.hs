@@ -28,14 +28,13 @@ module Main where
             (dt,    s2)    = geneticDungeon 10 (targetSize 20) pop1 rooms s1
             dg             = embiggenDungeon dt
             sections       = getBiomes dg
-            rules          = parseRules (convertRGB8 input) 3 []
+            rules          = parseRules (convertRGB8 input) 3 withRotations
             tis            = [0..(length $ utiles rules) - 1]
             baseWave       = generateStartingWave (M.keys dg) $ S.fromList tis
-            wave           = 
-                filterWave (sections M.! Floor) (S.singleton 0)
-                $ filterWave (sections M.! Wall) (S.fromList $ tail tis) baseWave
+            wave           = filterWave (sections M.! Floor) (S.singleton 0) baseWave
             heap           = foldl' (\h c -> H.insert (getEntropy (frequencies rules) $ wave M.! c, c) h) H.empty $ M.keys wave
-            collapsed = generateUntilValid rules (WaveFunction wave M.empty heap) s2
+            wf             = foldl' (\w at -> forceTile rules w 0 at) (WaveFunction wave M.empty heap) $ sections M.! Wall
+            collapsed = generateUntilValid rules wf s2
         writePng "test1.png" $ makeImage rules collapsed 3
 
     getBiomes :: Dungeon -> Map Cell [CoOrd]
