@@ -265,7 +265,7 @@ module DemiGen.TreeGen where
 
     treeToGenome (Node r size cs) = purgeDoors $ r :
         makeGenome 
-            (generateDungeonGrid 0 0)
+            (insertRoom M.empty r)
             r cs [] []
 
     makeGenome :: Dungeon -> Room -> [DungeonTree] -> [DungeonTree] -> [Room] -> [Room]
@@ -400,6 +400,13 @@ module DemiGen.TreeGen where
       where
         doors   = M.keys $ M.filter (== Conn) small
         
+    embiggenDungeon' :: [Room] -> Dungeon
+    embiggenDungeon' genome =
+        unsealDoors sealed dungeon
+      where
+        dungeon = genomeToDungeon genome
+        sealed  = foldl' (\d r -> addEmbiggenedRoom d r) M.empty genome
+
 
     embiggenDungeon :: DungeonTree -> Dungeon
     embiggenDungeon tree =
@@ -417,9 +424,9 @@ module DemiGen.TreeGen where
     printBoundedRawDungeon d x y = writePng "dungeonRawOut.png" $
         generateImage (\x y -> printDungeonPixel $ M.findWithDefault Empty (x,y) d) x y
 
-    printRawDungeon :: Dungeon -> IO ()
-    printRawDungeon d =
-            writePng "dungeonRawOut.png" $ 
+    printRawDungeon :: String -> Dungeon -> IO ()
+    printRawDungeon name d =
+            writePng name $ 
             generateImage 
                 (\x y -> printDungeonPixel $ M.findWithDefault Empty (x+minx-5,y+miny-5) d) 
                 (maxx + abs minx + 10) (maxy + abs miny + 10)
@@ -439,4 +446,4 @@ module DemiGen.TreeGen where
         let crooms    = choiceFromList $ zip [1,1..] rooms 
             (pop1,s1) = randomTrees 400 crooms 100 6 s
             (x,   sx) = geneticDungeon 10 (targetSize 100) pop1 rooms s1
-        printRawDungeon $ embiggenDungeon x
+        printRawDungeon "dungeonRawOut.png" $ embiggenDungeon x
