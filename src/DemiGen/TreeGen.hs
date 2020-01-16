@@ -295,7 +295,7 @@ module DemiGen.TreeGen where
     --take a set of rooms and create a Dungeon
     genomeToDungeon :: [Room] -> Dungeon
     genomeToDungeon =
-        foldl insertRoom (generateDungeonGrid 0 0)
+        foldl insertRoom M.empty
 
 --various fitness functions
 ---------------------------------------------------------------------------------------------------

@@ -27,23 +27,32 @@ module Main where
             (pop1, s1)     = randomTrees 100 crooms 10 6 s
             (dt,    s2)    = geneticDungeon 10 (targetSize 20) pop1 rooms s1
             dg             = embiggenDungeon dt
-            sections       = getBiomes dg
+            biomes         = getBiomes dg
             rules          = parseRules (convertRGB8 input) 3 withRotations
-            tis            = [0..(length $ utiles rules) - 1]
-            baseWave       = generateStartingWave (M.keys dg) $ S.fromList tis
-            wave           = filterWave (sections M.! Floor) (S.singleton 0) baseWave
-            heap           = foldl' (\h c -> H.insert (getEntropy (frequencies rules) $ wave M.! c, c) h) H.empty $ M.keys wave
-            wf             = foldl' (\w at -> forceTile rules w 0 at) (WaveFunction wave M.empty heap) $ sections M.! Wall
+            biomeSets      = biomesFromTemplate 3 withRotations (utiles rules) (convertRGB8 input)
+            wave           = M.foldlWithKey (\w b set -> setBiomeInWave (M.findWithDefault [] b biomes) set w) M.empty biomeSets
+            heap           = M.foldlWithKey (\h c poss -> H.insert (getEntropy (frequencies rules) poss,c) h) H.empty wave
+            wf             = WaveFunction wave M.empty heap
             collapsed = generateUntilValid rules wf s2
         writePng "test1.png" $ makeImage rules collapsed 3
 
     getBiomes :: Dungeon -> Map Cell [CoOrd]
     getBiomes = M.foldlWithKey' (\m c b -> M.insertWith (++) b [c] m) M.empty
 
-    filterWave ::[CoOrd] -> Set Int -> Wave ->  Wave
-    filterWave targets illegal w = foldl' (\wx c -> M.adjust (flip S.difference illegal) c wx) w targets
+    setBiomeInWave :: [CoOrd] -> Set Int -> Wave ->  Wave
+    setBiomeInWave targets legal w = foldl' (\wx c -> M.insert c legal wx) w targets
 
-
-
+    biomesFromTemplate :: Int -> [Transform] -> [TileImg] -> TileImg -> Map Cell (Set Int)
+    biomesFromTemplate n t uniques img =
+        M.fromList [(Wall, wallB),(Door, doorB), (Floor, floorB)]
+      where
+        wallSec = crop 0 0 n n img
+        doorSec = crop (17*n) 0 (2*n) (4*n) img
+        wallB   = getSubset n t uniques wallSec
+        doorB   = getSubset n t uniques doorSec
+        floorB  = 
+            S.difference
+                (S.fromList [0.. (length uniques) - 1])
+                (S.union wallB doorB)
 
     
