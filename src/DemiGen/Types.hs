@@ -131,7 +131,7 @@ module DemiGen.Types where
         (==) Open Open       = True
         (==) _ _             = False
 
-    data Cell = Empty | Occupied | Conn | Wall | Floor
+    data Cell = Empty | Occupied | Conn | Wall | Floor | Door
         deriving (Show, Eq, Ord)
 
     type Dungeon = Map CoOrd Cell

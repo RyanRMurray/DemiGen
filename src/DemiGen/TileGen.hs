@@ -88,6 +88,16 @@ module DemiGen.TileGen where
         tFreq          = getTileFrequencies unique tiles
         adjs           = getAdjacencyRules transmutations n unique
 
+    getSubset ::  Int -> [Transform] -> [TileImg] -> TileImg -> Set Int
+    getSubset n [] uniques section = getSubset n [noTransform] uniques section
+
+    getSubset n transforms uniques section =
+        S.fromList 
+        $ map (\t -> fromJust $ elemIndex t uniques) 
+        $ nub . concat $ map (map fst . (getTiles n))
+        $ [t section | t <- transforms]
+
+
 --wave initialising functions
 ---------------------------------------------------------------------------------------------------
 
