@@ -364,13 +364,13 @@ module DemiGen.TreeGen where
     side 6 = [(0,3)]
     side 8 = [(0,0)]
 
-    baseSeg :: Dungeon
-    baseSeg = M.fromList [((x,y),Floor) | x <- [0..3], y<- [0..3]]
+    baseSeg :: Cell -> Dungeon
+    baseSeg cell = M.fromList [((x,y),cell) | x <- [0..3], y<- [0..3]]
 
     addWallsToSeg :: Room -> CoOrd -> Dungeon
     addWallsToSeg (Room tiles _) at =
         M.mapKeys (\c -> (.+) (at .* 4) c)
-        $ foldl' (\s c -> M.insert c Wall s) baseSeg toAdd
+        $ foldl' (\s c -> M.insert c Wall s) (baseSeg Floor) toAdd
       where
         toAdd = concat 
             $ map (side . fst) 
@@ -386,7 +386,7 @@ module DemiGen.TreeGen where
     unsealDoor :: Dungeon -> CoOrd -> Dungeon
     unsealDoor small at =
         M.mapKeys (\c -> (.+) (at .* 4) c)
-        $ foldl' (\s c -> M.insert c Wall s) baseSeg toAdd
+        $ foldl' (\s c -> M.insert c Wall s) (baseSeg Door) toAdd
       where
         toAdd = concat 
             $ map (side . fst) 
@@ -394,11 +394,11 @@ module DemiGen.TreeGen where
             $ zip [1..] $ [(0,-1),(1,-1),(1,0),(1,1),(0,1),(-1,1),(-1,0),(-1,-1)]
 
     unsealDoors :: Dungeon -> Dungeon -> Dungeon
-    unsealDoors sealed small =
+    unsealDoors sealed ref =
         foldl' (\d s -> M.union s d) sealed
-        $ map (unsealDoor small) doors
+        $ map (unsealDoor ref) doors
       where
-        doors   = M.keys $ M.filter (== Conn) small
+        doors   = M.keys $ M.filter (== Conn) ref
         
     embiggenDungeon' :: [Room] -> Dungeon
     embiggenDungeon' genome =
@@ -439,6 +439,7 @@ module DemiGen.TreeGen where
     printDungeonPixel Empty = PixelRGB8 255 255 255
     printDungeonPixel Wall = tilePixel
     printDungeonPixel Floor = PixelRGB8 100 100 100
+    printDungeonPixel Door = PixelRGB8 255 0 0
 
     test = do
         rooms <- allRooms

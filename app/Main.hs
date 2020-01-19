@@ -29,11 +29,12 @@ module Main where
             dg             = embiggenDungeon dt
             biomes         = getBiomes dg
             rules          = parseRules (convertRGB8 input) 3 withRotations
-            biomeSets      = biomesFromTemplate 3 withRotations (utiles rules) (convertRGB8 input)
+            biomeSets      = biomesFromTemplate False 3 withRotations (utiles rules) (convertRGB8 input)
             wave           = M.foldlWithKey (\w b set -> setBiomeInWave (M.findWithDefault [] b biomes) set w) M.empty biomeSets
-            heap           = M.foldlWithKey (\h c poss -> H.insert (getEntropy (frequencies rules) poss,c) h) H.empty wave
+            heap           = M.foldlWithKey (\h c poss -> H.insert (getEntropy (frequencies rules) poss,c) h) H.empty wave :: EntropyHeap
             wf             = WaveFunction wave M.empty heap
-            collapsed = generateUntilValid rules wf s2
+            walled         = foldl' (\w c -> forceTile rules w 0 c) wf $ biomes M.! Wall
+            collapsed = generateUntilValid rules walled s2
         writePng "test1.png" $ makeImage rules collapsed 3
 
     getBiomes :: Dungeon -> Map Cell [CoOrd]
@@ -42,17 +43,18 @@ module Main where
     setBiomeInWave :: [CoOrd] -> Set Int -> Wave ->  Wave
     setBiomeInWave targets legal w = foldl' (\wx c -> M.insert c legal wx) w targets
 
-    biomesFromTemplate :: Int -> [Transform] -> [TileImg] -> TileImg -> Map Cell (Set Int)
-    biomesFromTemplate n t uniques img =
-        M.fromList [(Wall, wallB),(Door, doorB), (Floor, floorB)]
+    biomesFromTemplate :: Bool -> Int -> [Transform] -> [TileImg] -> TileImg -> Map Cell (Set Int)
+    biomesFromTemplate hasDoor n t uniques img 
+        | hasDoor   = M.fromList [(Wall, wallB),(Door, doorB), (Floor, floorB (S.union wallB doorB))]
+        | otherwise = M.fromList [(Wall, wallB),(Door,doorB), (Floor, floorB wallB)]
       where
         wallSec = crop 0 0 n n img
         doorSec = crop (17*n) 0 (2*n) (4*n) img
         wallB   = getSubset n t uniques wallSec
         doorB   = getSubset n t uniques doorSec
-        floorB  = 
+        floorB  notFloor = 
             S.difference
                 (S.fromList [0.. (length uniques) - 1])
-                (S.union wallB doorB)
+                notFloor
 
     
