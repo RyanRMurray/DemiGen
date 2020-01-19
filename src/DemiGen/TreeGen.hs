@@ -389,9 +389,11 @@ module DemiGen.TreeGen where
         $ foldl' (\s c -> M.insert c Wall s) (baseSeg Door) toAdd
       where
         toAdd = concat 
-            $ map (side . fst) 
+            $ map side
+            $ (++) [2,4,6,8]
+            $ map fst
             $ filter (\(_,c) -> M.findWithDefault Empty (c .+ at) small == Empty)
-            $ zip [1..] $ [(0,-1),(1,-1),(1,0),(1,1),(0,1),(-1,1),(-1,0),(-1,-1)]
+            $ zip [1,3..] $ [(0,-1),(1,0),(0,1),(-1,0)]
 
     unsealDoors :: Dungeon -> Dungeon -> Dungeon
     unsealDoors sealed ref =
@@ -439,7 +441,7 @@ module DemiGen.TreeGen where
     printDungeonPixel Empty = PixelRGB8 255 255 255
     printDungeonPixel Wall = tilePixel
     printDungeonPixel Floor = PixelRGB8 100 100 100
-    printDungeonPixel Door = PixelRGB8 255 0 0
+    printDungeonPixel Door = PixelRGB8 100 100 100
 
     test = do
         rooms <- allRooms

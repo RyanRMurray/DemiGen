@@ -49,7 +49,7 @@ module Main where
         | otherwise = M.fromList [(Wall, wallB),(Door,doorB), (Floor, floorB wallB)]
       where
         wallSec = crop 0 0 n n img
-        doorSec = crop (17*n) 0 (2*n) (4*n) img
+        doorSec = crop (17*n) n (2*n) (5*n) img
         wallB   = getSubset n t uniques wallSec
         doorB   = getSubset n t uniques doorSec
         floorB  notFloor = 
