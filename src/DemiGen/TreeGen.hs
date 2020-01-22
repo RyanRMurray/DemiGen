@@ -1,4 +1,5 @@
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE RecordWildCards #-}
 module DemiGen.TreeGen where
     import          DemiGen.Types
 
@@ -28,19 +29,32 @@ module DemiGen.TreeGen where
         , "special01", "special02", "special03"
         ]
 
+    halls = ["hall01", "hall02", "hall03"]
+    rooms = ["room01", "room02", "room03", "room04", "room05", "room06", "room07", "room08", "room09", "room10"]
+    special = ["special01", "special02", "special03"]
+
     --simple biome of all rooms
     allRooms :: IO [Room]
     allRooms = do
             inputs   <-  mapM (\n-> readPng $ "assets/rooms/"++n++".png") roomNames
-            return $ map getRoomData $ L.map convertRGB8 $ rights $ inputs
-    
+            return $ map (getRoomData "N/A") $ L.map convertRGB8 $ rights $ inputs
+
+    biomeRooms :: IO [Room]
+    biomeRooms = do
+        iH  <- mapM (\n-> readPng $ "assets/rooms/"++n++".png") halls
+        iR  <- mapM (\n-> readPng $ "assets/rooms/"++n++".png") rooms
+        iS  <- mapM (\n-> readPng $ "assets/rooms/"++n++".png") special
+        let convH = map (getRoomData "Hall") $ L.map convertRGB8 $ rights $ iH
+            convR = map (getRoomData "Room") $ L.map convertRGB8 $ rights $ iR
+            convS = map (getRoomData "Spec") $ L.map convertRGB8 $ rights $ iS
+        return (convH ++ convR ++ convS)
 
 --Functions for generating input room templates and starting dungeon
 ---------------------------------------------------------------------------------------------------
 
     --Parse an image to create a room object
-    getRoomData :: TileImg -> Room
-    getRoomData input = Room
+    getRoomData :: String -> TileImg -> Room
+    getRoomData biome input = Room biome
         (S.fromList $ floor ++ doors) $ 
         [(d, Open) | d <- doors]
       where
@@ -67,25 +81,25 @@ module DemiGen.TreeGen where
     rotateRoom r 2 = rotateRoom' r (\(x,y) -> (12 - x, 12 - y)) 
     rotateRoom r 3 = rotateRoom' r (\(x,y) -> (12 - y, x))      
 
-    rotateRoom' r f = Room
-        (S.map f $ tiles r) $
+    rotateRoom' Room{..} f = Room biome
+        (S.map f $ tiles) $
         L.map 
             (\(coord, c) -> (f coord, c)) 
-            $ doors r
+            $ doors
 
     offsetRoom :: Room -> Int -> Int -> Room
-    offsetRoom (Room ts ds) ox oy = Room
-            (S.map (\ (x,y)   -> (x+ox,y+oy)   ) ts) $
-             L.map (\((x,y),c)->((x+ox,y+oy),c)) ds
+    offsetRoom Room{..} ox oy = Room biome
+              (S.map (\ (x,y)  -> (x+ox,y+oy)   ) tiles)
+            $ L.map (\((x,y),c)->((x+ox,y+oy),c)) doors
 
     noCollision :: Dungeon -> Room -> CoOrd -> Bool
-    noCollision d (Room ts _) (ox,oy) = 
-        and [isFree d (x+ox,y+oy) | (x,y) <- S.toList ts]
+    noCollision d Room{..} (ox,oy) = 
+        and [isFree d (x+ox,y+oy) | (x,y) <- S.toList tiles]
     
     isFree d c = d M.!? c /= Just Occupied
 
     findValidDoor :: Dungeon -> Room -> Maybe CoOrd
-    findValidDoor d (Room _ doors)
+    findValidDoor d Room{..}
         | length valid /= 0 = Just $ fst $ head valid
         | otherwise         = Nothing
       where
@@ -113,8 +127,8 @@ module DemiGen.TreeGen where
         | otherwise             = Nothing
 
     setConn :: Room -> Room -> CoOrd -> Room
-    setConn (Room ts doors) connected door =
-        Room ts $ (door, To connected) : [(c, t) | (c,t) <- doors, c /= door]
+    setConn Room{..} connected door =
+        Room biome tiles $ (door, To connected) : [(c, t) | (c,t) <- doors, c /= door]
           
 --random tree generator
 ---------------------------------------------------------------------------------------------------
@@ -136,7 +150,7 @@ module DemiGen.TreeGen where
     --generate a random tree given a  set of rooms, maximum size and number of children a node can have
     randomTree :: Choice Room -> Int -> Int -> PureMT -> (DungeonTree, PureMT)
     randomTree rooms 1 _ seed = 
-        (Leaf r, s2)
+        (Node r 1 [], s2)
       where
         (r, s2) = choose rooms seed
 
@@ -193,7 +207,7 @@ module DemiGen.TreeGen where
     swapSubTree new host s = (new, s)
 
     getRandomSubTree :: DungeonTree -> PureMT -> (DungeonTree, PureMT)
-    getRandomSubTree (Leaf r) s = ((Leaf r), s)
+    getRandomSubTree (Node r size []) s = ((Node r size []), s)
     getRandomSubTree parent s 
         | choice == -1 = (parent, s2)
         | otherwise    = getRandomSubTree (children !! choice) s2
@@ -211,16 +225,15 @@ module DemiGen.TreeGen where
         (choice2, s3) = randomFrom [(r,1)| r<-choices] s2
         (choice3, s4) = randomFrom [(r,1)| r<-choices] s3
         (choice4, s5) = randomFrom [(r,1)| r<-choices] s4
-        chosen        = [Leaf choice1, Leaf choice2, Leaf choice3, Leaf choice4]
-        f (Leaf r) sd = (Node r 5 chosen, sd)
-        f (Node r  size children) sd = (Node r (size + 4) (chosen ++ children), sd) 
+        chosen        = [Node choice1 1 [], Node choice2 1 [], Node choice3 1 [], Node choice4 1 []]
+        f (Node r size children) sd = (Node r (size + 4) (chosen ++ children), sd) 
 
     --delete a leaf
     trim :: [Room] -> DungeonTree -> DungeonTree -> PureMT -> (DungeonTree, PureMT)
     trim _ _ = 
         applyToRandom f
       where
-        f (Leaf _) s = (Null, s)
+        f (Node _ _ []) s = (Null, s)
         f child    s = applyToRandom f child s
     
     --alter the type of room a node represents, possibly changing the layout of its children
@@ -229,12 +242,11 @@ module DemiGen.TreeGen where
         applyToRandom f recipient s2
       where
         (choice, s2)    = randomFrom [(r,1)| r<-choices] s
-        f (Leaf r)   sd = (Leaf choice, sd)
         f (Node r size c) sd = (Node choice size c, sd)
 
     --take a function that transforms a tree and apply it to a random node/leaf
     applyToRandom :: (DungeonTree -> PureMT -> (DungeonTree, PureMT)) -> DungeonTree -> PureMT -> (DungeonTree, PureMT)
-    applyToRandom f (Leaf r) s = f (Leaf r) s
+    applyToRandom f (Node r size []) s = f (Node r size []) s
     applyToRandom f parent s 
         | choice == -1 = f parent s2
         | otherwise    = applyToRandom' f parent choice s2
@@ -253,41 +265,42 @@ module DemiGen.TreeGen where
      
     --should probably just make this a feature of a node
     getSize :: DungeonTree -> Int
-    getSize (Leaf _) = 1
     getSize (Node _ s _) = s
 
 --tree to dungeon functions
 ---------------------------------------------------------------------------------------------------
 
     --convert the tree to a list of rooms offset to their positions in the dungeon
-    treeToGenome :: DungeonTree -> [Room]
-    treeToGenome (Leaf (Room ts _)) = [Room ts []]
+    treeToGenome :: String -> DungeonTree -> [Room]
+    treeToGenome _ (Node Room{..} _ []) = [Room biome tiles []]
 
-    treeToGenome (Node r size cs) = purgeDoors $ r :
-        makeGenome 
+    treeToGenome deadend (Node r size cs) = purgeDoors $ r :
+        makeGenome deadend
             (insertRoom M.empty r)
             r cs [] []
 
-    makeGenome :: Dungeon -> Room -> [DungeonTree] -> [DungeonTree] -> [Room] -> [Room]
-    makeGenome d parent ((Leaf r):cs) next rooms = 
+    makeGenome :: String -> Dungeon -> Room -> [DungeonTree] -> [DungeonTree] -> [Room] -> [Room]
+    makeGenome deadend d parent ((Node r _ []):cs) next rooms = 
         case insertChildRoom d parent r of
-            Nothing -> makeGenome d parent cs next rooms
-            Just (d2, p2, c2) -> makeGenome d2 p2 cs next (c2:rooms)
+            Nothing -> makeGenome deadend d parent cs next rooms
+            Just (d2, p2, c2) -> makeGenome deadend d2 p2 cs next (c2:rooms)
 
-    makeGenome d parent ((Node r _ subCs):cs) next rooms =
+    makeGenome deadend d parent ((Node r _ subCs):cs) next rooms =
         case insertChildRoom d parent r of
-            Nothing -> makeGenome d parent cs next rooms
-            Just (d2, p2, c2) -> makeGenome d2 p2 cs (next ++ [Node c2 0 subCs]) rooms
+            Nothing -> makeGenome deadend d parent cs next rooms
+            Just (d2, p2, c2) -> makeGenome deadend d2 p2 cs (next ++ [Node c2 0 subCs]) rooms
 
-    makeGenome d parent [] ((Node c _ cs):ns) rooms = makeGenome d c cs ns (parent:rooms)
+    makeGenome deadend d parent [] ((Node c _ cs):ns) rooms
+        | biome c == deadend = makeGenome deadend d c [] ns (parent:rooms)
+        | otherwise          = makeGenome deadend d c cs ns (parent:rooms)
 
-    makeGenome _ _ [] [] rooms = rooms
+    makeGenome _ _ _ [] [] rooms = rooms
 
     --delete unused doors
     purgeDoors :: [Room] -> [Room]
     purgeDoors [] = []
-    purgeDoors (Room ts ds:rs) = 
-        Room (S.filter (\t -> notElem t oTiles) ts) ( ds \\ opens) : purgeDoors rs
+    purgeDoors (Room b ts ds:rs) = 
+        Room b (S.filter (\t -> notElem t oTiles) ts) ( ds \\ opens) : purgeDoors rs
       where
         opens = filter (\(_,c) -> c == Open) ds
         oTiles = map fst opens
@@ -342,14 +355,25 @@ module DemiGen.TreeGen where
 
 
     byRooms :: DungeonTree -> Int
-    byRooms = length . treeToGenome
+    byRooms = length . (treeToGenome "")
 
     targetSize :: Int -> DungeonTree -> Int
     targetSize max t
         | l < max   = l
         | otherwise = 0
       where
-        l = length $ treeToGenome t 
+        l = length $ treeToGenome "" t
+
+
+    brownValtchanov :: DungeonTree -> Int
+    brownValtchanov dg =
+        undefined
+      where
+        validRooms = treeToGenome "Spec" dg
+        groups = foldl (\gs r -> M.insertWith (++) (biome r) [r] gs) M.empty validRooms
+        specialFactor = (*) 50 $ length $ groups M.! "Spec"
+        hallFactor = undefined
+        
 
 --Prepare dungeon for room content generation
 ---------------------------------------------------------------------------------------------------
@@ -368,7 +392,7 @@ module DemiGen.TreeGen where
     baseSeg cell = M.fromList [((x,y),cell) | x <- [0..3], y<- [0..3]]
 
     addWallsToSeg :: Room -> CoOrd -> Dungeon
-    addWallsToSeg (Room tiles _) at =
+    addWallsToSeg Room{..} at =
         M.mapKeys (\c -> (.+) (at .* 4) c)
         $ foldl' (\s c -> M.insert c Wall s) (baseSeg Floor) toAdd
       where
@@ -378,7 +402,7 @@ module DemiGen.TreeGen where
             $ zip [1..] $ [(0,-1),(1,-1),(1,0),(1,1),(0,1),(-1,1),(-1,0),(-1,-1)]
 
     addEmbiggenedRoom :: Dungeon -> Room -> Dungeon
-    addEmbiggenedRoom dg r@(Room tiles _) =
+    addEmbiggenedRoom dg r@Room{..} =
         foldl' (\d s -> M.union s d) dg
         $ map (addWallsToSeg r) 
         $ S.toList tiles
@@ -410,11 +434,11 @@ module DemiGen.TreeGen where
         sealed  = foldl' (\d r -> addEmbiggenedRoom d r) M.empty genome
 
 
-    embiggenDungeon :: DungeonTree -> Dungeon
-    embiggenDungeon tree =
+    embiggenDungeon :: String -> DungeonTree -> Dungeon
+    embiggenDungeon deadend tree =
         unsealDoors sealed dungeon
       where
-        genome  = treeToGenome tree
+        genome  = treeToGenome deadend tree
         dungeon = genomeToDungeon genome
         sealed  = foldl' (\d r -> addEmbiggenedRoom d r) M.empty genome
 
@@ -441,7 +465,6 @@ module DemiGen.TreeGen where
     printDungeonPixel Empty = PixelRGB8 255 255 255
     printDungeonPixel Wall = tilePixel
     printDungeonPixel Floor = PixelRGB8 100 100 100
-    printDungeonPixel Door = PixelRGB8 100 100 100
 
     test = do
         rooms <- allRooms
@@ -449,4 +472,4 @@ module DemiGen.TreeGen where
         let crooms    = choiceFromList $ zip [1,1..] rooms 
             (pop1,s1) = randomTrees 400 crooms 100 6 s
             (x,   sx) = geneticDungeon 10 (targetSize 100) pop1 rooms s1
-        printRawDungeon "dungeonRawOut.png" $ embiggenDungeon x
+        printRawDungeon "dungeonRawOut.png" $ embiggenDungeon "" x

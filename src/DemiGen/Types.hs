@@ -120,7 +120,8 @@ module DemiGen.Types where
 --types and globals for TreeGen
     --Think of a room as a node in a tree, where doors are connected nodes.
     data Room = Room
-        { tiles :: Set CoOrd
+        { biome :: String
+        , tiles :: Set CoOrd
         , doors :: [(CoOrd, Connection Room)]
         } deriving (Show)
 
@@ -136,10 +137,13 @@ module DemiGen.Types where
 
     type Dungeon = Map CoOrd Cell
 
-    data DungeonTree = Leaf Room
-                     | Node Room Int [DungeonTree]
-                     | Null
-                     deriving (Show)
+    data DungeonTree = Node
+        { room :: Room
+        , size :: Int
+        , children :: [DungeonTree]
+        } 
+        | Null
+        deriving (Show)
 
     instance Eq DungeonTree where
         (==) Null Null = True
