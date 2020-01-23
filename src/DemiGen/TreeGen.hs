@@ -76,14 +76,14 @@ module DemiGen.TreeGen where
     rotateRoom r 2 = rotateRoom' r (\(x,y) -> (12 - x, 12 - y)) 
     rotateRoom r 3 = rotateRoom' r (\(x,y) -> (12 - y, x))      
 
-    rotateRoom' Room{..} f = Room 0 rType
+    rotateRoom' Room{..} f = Room uid rType
         (S.map f $ tiles) $
         L.map 
             (\(coord, c) -> (f coord, c)) 
             $ doors
 
     offsetRoom :: Room -> Int -> Int -> Room
-    offsetRoom Room{..} ox oy = Room 0 rType
+    offsetRoom Room{..} ox oy = Room uid rType
               (S.map (\ (x,y)  -> (x+ox,y+oy)   ) tiles)
             $ L.map (\((x,y),c)->((x+ox,y+oy),c)) doors
 
@@ -269,7 +269,7 @@ module DemiGen.TreeGen where
     treeToGenome :: RoomType -> DungeonTree -> [Room]
     treeToGenome _ (Node Room{..} _ []) = [Room 0 rType tiles []]
 
-    treeToGenome deadend (Node r size cs) = purgeDoors $ r :
+    treeToGenome deadend (Node r size cs) = purgeDoors $
         makeGenome deadend
             (insertRoom M.empty r)
             r cs 1 [] []
@@ -278,12 +278,12 @@ module DemiGen.TreeGen where
     makeGenome deadend d parent ((Node r _ []):cs) i next rooms = 
         case insertChildRoom d parent (setID r i) of
             Nothing -> makeGenome deadend d parent cs (i+1) next rooms
-            Just (d2, p2, c2) -> trace (show c2) $ makeGenome deadend d2 p2 cs (i+1) next (c2:rooms)
+            Just (d2, p2, c2) -> trace (show $ uid c2) $ makeGenome deadend d2 p2 cs (i+1) next (c2:rooms)
 
     makeGenome deadend d parent ((Node r _ subCs):cs) i next rooms = 
         case insertChildRoom d parent (setID r i) of
             Nothing -> makeGenome deadend d parent cs (i+1) next rooms
-            Just (d2, p2, c2) -> trace (show c2) $ makeGenome deadend d2 p2 cs (i+1) (next ++ [Node c2 0 subCs]) rooms
+            Just (d2, p2, c2) -> trace (show $ uid c2) $ makeGenome deadend d2 p2 cs (i+1) (next ++ [Node c2 0 subCs]) rooms
 
     makeGenome deadend d parent [] ids ((Node c _ cs):ns) rooms
         | rType c == deadend =  makeGenome deadend d c [] ids ns (parent:rooms)
