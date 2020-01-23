@@ -1,3 +1,4 @@
+{-# LANGUAGE RecordWildCards #-}
 module DemiGen.Types where
 
     import Codec.Picture
@@ -118,17 +119,24 @@ module DemiGen.Types where
     repeatPattern p = below [beside [p, p], beside [p, p]]
 
 --types and globals for TreeGen
+    
+    data RoomType = Hall | Special | Normal | None
+        deriving (Show, Eq, Ord)
+    
     --Think of a room as a node in a tree, where doors are connected nodes.
     data Room = Room
-        { biome :: String
+        { uid   :: Int
+        , rType :: RoomType 
         , tiles :: Set CoOrd
-        , doors :: [(CoOrd, Connection Room)]
+        , doors :: [(CoOrd, Connection Int)]
         } deriving (Show)
 
-    data Connection a = Blocked | Open | To a deriving (Show)
+    setID :: Room -> Int -> Room
+    setID Room{..} x = Room x rType tiles doors
 
-    instance Eq (Connection a) where
-        (==) Blocked Blocked = True
+    data Connection a = To a | Open deriving (Show)
+
+    instance Eq (Connection a)  where
         (==) Open Open       = True
         (==) _ _             = False
 

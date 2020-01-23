@@ -26,7 +26,7 @@ module Main where
         let crooms         = choiceFromList $ zip [1,1..] rooms
             (pop1, s1)     = randomTrees 100 crooms 10 6 s
             (dt,    s2)    = geneticDungeon 10 (targetSize 20) pop1 rooms s1
-            dg             = embiggenDungeon "" dt
+            dg             = embiggenDungeon None dt
             biomes         = getBiomes dg
             rules          = parseRules (convertRGB8 input) 3 withRotations
             biomeSets      = biomesFromTemplate False 3 withRotations (utiles rules) (convertRGB8 input)
