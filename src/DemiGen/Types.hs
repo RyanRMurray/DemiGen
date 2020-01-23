@@ -131,10 +131,18 @@ module DemiGen.Types where
         , doors :: [(CoOrd, Connection Int)]
         } deriving (Show)
 
+    instance Eq Room where
+        (==) (Room a _ _ _) (Room b _ _ _) = a == b
+
     setID :: Room -> Int -> Room
     setID Room{..} x = Room x rType tiles doors
 
     data Connection a = To a | Open deriving (Show)
+
+    fromTo :: Connection a -> a
+    fromTo (To x) = x
+
+    data Tree a = Tree a [Tree a]
 
     instance Eq (Connection a)  where
         (==) Open Open       = True

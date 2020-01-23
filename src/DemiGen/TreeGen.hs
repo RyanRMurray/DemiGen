@@ -16,6 +16,7 @@ module DemiGen.TreeGen where
 
     import           Data.Ord
     import           Data.Either
+    import           Data.Maybe
 
     import           Codec.Picture
     import           Codec.Picture.Extra
@@ -265,25 +266,16 @@ module DemiGen.TreeGen where
 --tree to dungeon functions
 ---------------------------------------------------------------------------------------------------
 
-    --convert the tree to a list of rooms offset to their positions in the dungeon
-    treeToGenome :: RoomType -> DungeonTree -> [Room]
-    treeToGenome _ (Node Room{..} _ []) = [Room 0 rType tiles []]
-
-    treeToGenome deadend (Node r size cs) = purgeDoors $
-        makeGenome deadend
-            (insertRoom M.empty r)
-            r cs 1 [] []
-
     makeGenome :: RoomType -> Dungeon -> Room -> [DungeonTree] -> Int -> [DungeonTree] -> [Room] -> [Room]
     makeGenome deadend d parent ((Node r _ []):cs) i next rooms = 
         case insertChildRoom d parent (setID r i) of
             Nothing -> makeGenome deadend d parent cs (i+1) next rooms
-            Just (d2, p2, c2) -> trace (show $ uid c2) $ makeGenome deadend d2 p2 cs (i+1) next (c2:rooms)
+            Just (d2, p2, c2) -> trace ((++) "a " $ show $ uid c2) $ makeGenome deadend d2 p2 cs (i+1) next (c2:rooms)
 
     makeGenome deadend d parent ((Node r _ subCs):cs) i next rooms = 
         case insertChildRoom d parent (setID r i) of
             Nothing -> makeGenome deadend d parent cs (i+1) next rooms
-            Just (d2, p2, c2) -> trace (show $ uid c2) $ makeGenome deadend d2 p2 cs (i+1) (next ++ [Node c2 0 subCs]) rooms
+            Just (d2, p2, c2) -> trace ((++) "b " $ show $ uid c2) $ makeGenome deadend d2 p2 cs (i+1) (next ++ [Node c2 0 subCs]) rooms
 
     makeGenome deadend d parent [] ids ((Node c _ cs):ns) rooms
         | rType c == deadend =  makeGenome deadend d c [] ids ns (parent:rooms)
@@ -298,7 +290,16 @@ module DemiGen.TreeGen where
         Room id b (S.filter (\t -> notElem t oTiles) ts) ( ds \\ opens) : purgeDoors rs
       where
         opens = filter (\(_,c) -> c == Open) ds
-        oTiles = map fst opens
+        oTiles = map fst opens      
+
+    --convert the tree to a list of rooms offset to their positions in the dungeon
+    treeToGenome :: RoomType -> DungeonTree -> [Room]
+    treeToGenome _ (Node Room{..} _ []) = [Room 0 rType tiles []]
+
+    treeToGenome deadend (Node r size cs) = purgeDoors $
+        makeGenome deadend
+            (insertRoom M.empty r)
+            r cs 1 [] []
 
     --take a set of rooms and create a Dungeon
     genomeToDungeon :: [Room] -> Dungeon
