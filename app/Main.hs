@@ -19,12 +19,13 @@ module Main where
     import DemiGen.TileGen
 
     main :: IO ()
-    main = do
+    main = test
+    
+    taist = do
         rooms <- allRooms
         s     <- newPureMT
         Right input <- readPng "./assets/sources/sewer.png"
-        let crooms         = choiceFromList $ zip [1,1..] rooms
-            (pop1, s1)     = randomTrees 100 crooms 10 6 s
+        let (pop1, s1)     = randomTrees rooms 100 10 s
             (dt,    s2)    = geneticDungeon 10 (targetSize 20) pop1 rooms s1
             dg             = embiggenDungeon None dt
             biomes         = getBiomes dg

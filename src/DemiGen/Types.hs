@@ -125,17 +125,10 @@ module DemiGen.Types where
     
     --Think of a room as a node in a tree, where doors are connected nodes.
     data Room = Room
-        { uid   :: Int
-        , rType :: RoomType 
+        { rType :: RoomType 
         , tiles :: Set CoOrd
         , doors :: [(CoOrd, Connection Int)]
         } deriving (Show)
-
-    instance Eq Room where
-        (==) (Room a _ _ _) (Room b _ _ _) = a == b
-
-    setID :: Room -> Int -> Room
-    setID Room{..} x = Room x rType tiles doors
 
     data Connection a = To a | Open deriving (Show)
 
@@ -153,23 +146,41 @@ module DemiGen.Types where
 
     type Dungeon = Map CoOrd Cell
 
-    data DungeonTree = Node
-        { room :: Room
-        , size :: Int
-        , children :: [DungeonTree]
-        } 
-        | Null
-        deriving (Show)
+    data Node = Node
+        { room       :: Room
+        , connections :: [Int]
+        } deriving (Show)
 
-    instance Eq DungeonTree where
-        (==) Null Null = True
-        (==) _ _       = False
+    type DungeonTree = Map Int Node
+
+    alterRoom :: DungeonTree -> Int -> Room -> DungeonTree
+    alterRoom t id r =
+        M.insert id (Node r cons) t
+      where
+        (Node _ cons) = t M.! id
     
-    cons :: DungeonTree -> [DungeonTree] -> [DungeonTree]
-    cons Null n = n
-    cons a b    = a:b
+    getRoom :: DungeonTree -> Int -> Maybe Room
+    getRoom t id =
+        room <$> t M.!? id
+
+    alterConns :: DungeonTree -> Int -> [Int] -> DungeonTree
+    alterConns t id add =
+        M.insert id (Node r (cons ++ add)) t
+      where 
+        (Node r cons) = t M.! id
 
 
+    getConns :: DungeonTree -> Int -> [Int]
+    getConns t id = connections $ t M.! id 
+
+
+    getSubTree :: DungeonTree -> Int -> DungeonTree
+    getSubTree t toGet
+        | children == [] = node
+        | otherwise      = M.unions $ node : (map (getSubTree t) children)
+      where
+        children = getConns t toGet
+        node     = M.singleton toGet $ t M.! toGet
 
 
     doorPixel :: PixelRGB8
