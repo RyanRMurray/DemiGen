@@ -16,31 +16,25 @@ module DemiGen.Types where
 
 --Random selection
 
-    type Choice a = Map Int a
-
     --take a list of items and their relative frequency and return a randomly selected item and the updated PRNG
     randomFrom :: [(a,Int)] -> PureMT -> (a,PureMT)
     randomFrom list s = (choices !! (i `mod` length choices), s2)
         where
             choices = concat [replicate n c | (c,n) <-list]
             (i,s2)  = randomInt s
-    
-    choiceFromList :: [(Int, a)] -> Choice a
-    choiceFromList =
-        foldl (\m (w,c) -> choiceAdd m w c) M.empty 
 
-    choiceAdd :: Choice a -> Int -> a -> Choice a
-    choiceAdd cs weight choice =
-        foldl' (\m (k,v) -> M.insert k v m) cs $ zip [lower..upper] $ cycle [choice]
+    randomN :: Int -> PureMT -> ([Int], PureMT)
+    randomN n s =
+        iterate addR ([], s) !! n
       where
-        lower = M.size cs
-        upper = lower + weight - 1
+        addR (ns, sx) = (\(n, s2) -> (n:ns, s2)) $ randomInt sx
 
-    choose :: Choice a -> PureMT -> (a, PureMT)
-    choose choices seed = 
-        (choices M.! (x `mod` M.size choices), s2)
-      where
-        (x,s2) = randomInt seed
+    randR :: Int -> PureMT -> (Int, PureMT)
+    randR bound s = (\(n,sx) -> (abs n `mod` bound, sx)) $ randomInt s
+
+    random :: [a] -> PureMT -> (a, PureMT)
+    random l s = (\(n, sx) -> (l !! n, sx)) $ randR (length l) s
+
 
 --Simple functions for grid-based processes
 
@@ -163,12 +157,11 @@ module DemiGen.Types where
     getRoom t id =
         room <$> t M.!? id
 
-    alterConns :: DungeonTree -> Int -> [Int] -> DungeonTree
-    alterConns t id add =
+    addConns :: DungeonTree -> Int -> [Int] -> DungeonTree
+    addConns t id add =
         M.insert id (Node r (cons ++ add)) t
       where 
         (Node r cons) = t M.! id
-
 
     getConns :: DungeonTree -> Int -> [Int]
     getConns t id = connections $ t M.! id 
@@ -181,6 +174,18 @@ module DemiGen.Types where
       where
         children = getConns t toGet
         node     = M.singleton toGet $ t M.! toGet
+
+    reassignID :: DungeonTree -> (Int, Int) -> DungeonTree
+    reassignID t (old, new)
+        | M.notMember old t = t
+        | otherwise =
+            M.map alter
+            $ M.delete old
+            $ M.insert new (t M.! old) t
+      where
+        alter n@(Node r cs)
+            | elem old cs = Node r (new : delete old cs)
+            | otherwise   = n
 
 
     doorPixel :: PixelRGB8

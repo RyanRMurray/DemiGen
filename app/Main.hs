@@ -19,9 +19,7 @@ module Main where
     import DemiGen.TileGen
 
     main :: IO ()
-    main = test
-    
-    taist = do
+    main = do
         rooms <- allRooms
         s     <- newPureMT
         Right input <- readPng "./assets/sources/sewer.png"
