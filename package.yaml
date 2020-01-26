@@ -26,13 +26,14 @@ dependencies:
 - containers
 - vector
 - unordered-containers
-- JuicyPixels >= 3.3
+- JuicyPixels
 - JuicyPixels-extra
+- JuicyPixels-repa
 - ghc
 - split
 - heap
 - random-shuffle
-- base >= 4.7 && < 5
+- base
 
 library:
   source-dirs: src

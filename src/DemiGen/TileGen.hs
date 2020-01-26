@@ -20,6 +20,7 @@ module DemiGen.TileGen where
 
     import           Codec.Picture
     import           Codec.Picture.Extra
+    import           Codec.Picture.Repa
 
 
     data Rules = Rules
@@ -198,18 +199,25 @@ module DemiGen.TileGen where
             Left sn -> trace ("failed") $ generateUntilValid r w sn
             Right g -> g
 
-    defaultTile :: Int -> TileImg
-    defaultTile n = generateImage defaultTilePixel n n
+    defaultTile :: Int -> Int -> Img RGB
+    defaultTile x y = convertImage $ generateImage defaultTilePixel x y
 
     makeImage :: Rules -> Grid -> Int -> TileImg
     makeImage Rules{..} collapsed n =
-        below [generateRow minx maxx yy | yy <- [miny..maxy]]
+        convertRGB8 
+        . imgToImage 
+        . hConcat 
+        $ concat [[generateRow minx maxx yy, horizontal] | yy <- [miny..maxy]]
+     
       where
+        tiles                 = map convertImage utiles
         (minx,miny,maxx,maxy) = getBounds (M.keys collapsed) (-5,-5,5,5)
-        generateRow minx maxx y = beside 
+        vertical = convertImage   $ generateImage (\x y -> PixelRGB8 0 0 0) 1 n
+        horizontal = convertImage $ generateImage (\x y -> PixelRGB8 0 0 0) ((n+1) * maxx - minx) 1
+        generateRow minx maxx y = vConcat 
             [ case collapsed M.!? (xx,y) of
-                Just r -> utiles !! r
-                Nothing -> defaultTile n 
+                Just r -> vConcat [tiles !! r, vertical]
+                Nothing -> defaultTile (n+1) n
             | xx <- [minx..maxx]
             ]
 

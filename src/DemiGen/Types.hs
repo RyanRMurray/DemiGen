@@ -6,6 +6,7 @@ module DemiGen.Types where
 
     import Data.Map (Map)
     import qualified Data.Map as M
+    import qualified Data.Set as S
     import Data.Heap (MinHeap)
     import Data.Set (Set)
     import Data.List
@@ -76,7 +77,7 @@ module DemiGen.Types where
 
     type Transform = TileImg -> TileImg             --Transformations for enriching input tile samples
 
-    defaultTilePixel _ _ = PixelRGB8 255 0 127
+    defaultTilePixel _ _ = PixelRGB8 0 0 0
 
     --Options for enriching input tile data
     noTransform :: Transform
@@ -178,6 +179,7 @@ module DemiGen.Types where
       where
         children = getConns t toGet
         node     = M.singleton toGet $ t M.! toGet
+
 
     reassignID :: DungeonTree -> (Int, Int) -> DungeonTree
     reassignID t (old, new)

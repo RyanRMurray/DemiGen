@@ -192,7 +192,7 @@ module DemiGen.TreeGen where
         (rid, s3)    = random (M.keys recipient) s2
         toAdd        = getSubTree donor did
         toDelete     = getSubTree recipient rid
-        ids          = [(fst $ M.findMax recipient) ..]
+        ids          = filter (\i -> M.notMember i recipient) [(fst $ M.findMax recipient) ..]
         moddedAdd    = foldl' reassignID toAdd $ zip (M.keys toAdd) ids
         addNode      = snd $ M.findMin moddedAdd
         crossed =  
@@ -272,6 +272,7 @@ module DemiGen.TreeGen where
         startDG = insertRoom M.empty $ room $ t M.! startID
         startCs = getConns t startID
         startOu = M.insert startID (Node (fromJust $ getRoom t startID) []) M.empty
+
 
     --take a set of rooms and create a Dungeon
     genomeToDungeon :: DungeonTree -> Dungeon

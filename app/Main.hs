@@ -13,10 +13,12 @@ module Main where
 
     import           Codec.Picture
     import           Codec.Picture.Extra
+    import           Codec.Picture.Repa
 
     import DemiGen.Types
     import DemiGen.TreeGen
     import DemiGen.TileGen
+    
 
     main :: IO ()
     main = do
@@ -27,14 +29,14 @@ module Main where
             (dt,   s2) = geneticDungeon 20 (targetSize 100) pop1 rooms s1
             dg             = embiggenDungeon None dt
             biomes         = getBiomes dg
-            rules          = parseRules (convertRGB8 input) 3 withRotations
-            biomeSets      = biomesFromTemplate False 3 withRotations (utiles rules) (convertRGB8 input)
+            rules          = parseRules (convertRGB8 input) 15 withRotations
+            biomeSets      = biomesFromTemplate False 15 withRotations (utiles rules) (convertRGB8 input)
             wave           = M.foldlWithKey (\w b set -> setBiomeInWave (M.findWithDefault [] b biomes) set w) M.empty biomeSets
             heap           = M.foldlWithKey (\h c poss -> H.insert (getEntropy (frequencies rules) poss,c) h) H.empty wave :: EntropyHeap
             wf             = WaveFunction wave M.empty heap
             walled         = foldl' (\w c -> forceTile rules w 0 c) wf $ biomes M.! Wall
             collapsed = generateUntilValid rules walled s2
-        writePng "test1.png" $ makeImage rules collapsed 3
+        writePng "test1.png" $ makeImage rules collapsed 15
 
     getBiomes :: Dungeon -> Map Cell [CoOrd]
     getBiomes = M.foldlWithKey' (\m c b -> M.insertWith (++) b [c] m) M.empty
@@ -47,9 +49,8 @@ module Main where
         | hasDoor   = M.fromList [(Wall, wallB),(Door, doorB), (Floor, floorB (S.union wallB doorB))]
         | otherwise = M.fromList [(Wall, wallB),(Door,doorB), (Floor, floorB wallB)]
       where
-        wallSec = crop 0 0 n n img
         doorSec = crop (17*n) n (2*n) (5*n) img
-        wallB   = getSubset n t uniques wallSec
+        wallB   = S.singleton 0
         doorB   = getSubset n t uniques doorSec
         floorB  notFloor = 
             S.difference
