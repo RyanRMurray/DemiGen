@@ -20,7 +20,6 @@ module DemiGen.TileGen where
 
     import           Codec.Picture
     import           Codec.Picture.Extra
-    import           Codec.Picture.Repa
 
 
     data Rules = Rules
@@ -199,25 +198,18 @@ module DemiGen.TileGen where
             Left sn -> trace ("failed") $ generateUntilValid r w sn
             Right g -> g
 
-    defaultTile :: Int -> Int -> Img RGB
-    defaultTile x y = convertImage $ generateImage defaultTilePixel x y
+    defaultTile :: Int -> Int -> TileImg
+    defaultTile x y = generateImage defaultTilePixel x y
 
-    makeImage :: Rules -> Grid -> Int -> TileImg
-    makeImage Rules{..} collapsed n =
-        convertRGB8 
-        . imgToImage 
-        . hConcat 
-        $ concat [[generateRow minx maxx yy, horizontal] | yy <- [miny..maxy]]
-     
+    makeImage :: [TileImg] -> Grid -> Int -> TileImg
+    makeImage utiles collapsed n =
+        generateImage getPx (n'*(maxx-minx+1)) (n'*(maxy-miny+1))
       where
-        tiles                 = map convertImage utiles
-        (minx,miny,maxx,maxy) = getBounds (M.keys collapsed) (-5,-5,5,5)
-        vertical = convertImage   $ generateImage (\x y -> PixelRGB8 0 0 0) 1 n
-        horizontal = convertImage $ generateImage (\x y -> PixelRGB8 0 0 0) ((n+1) * maxx - minx) 1
-        generateRow minx maxx y = vConcat 
-            [ case collapsed M.!? (xx,y) of
-                Just r -> vConcat [tiles !! r, vertical]
-                Nothing -> defaultTile (n+1) n
-            | xx <- [minx..maxx]
-            ]
+        n' = n+1
+        (minx,miny,maxx,maxy) = getBounds (M.keys collapsed) (0,0,0,0)
+        getPx x y =  
+            case collapsed M.!? ( (x+(minx*n'))`div`n' , (y+(miny*n'))`div`n' )  of
+                Nothing -> PixelRGB8 0 0 0
+                Just at -> pixelAt (utiles !! at) (x `mod` n') (y `mod` n')
+
 

@@ -13,12 +13,10 @@ module Main where
 
     import           Codec.Picture
     import           Codec.Picture.Extra
-    import           Codec.Picture.Repa
 
     import DemiGen.Types
     import DemiGen.TreeGen
     import DemiGen.TileGen
-    
 
     main :: IO ()
     main = do
@@ -36,7 +34,10 @@ module Main where
             wf             = WaveFunction wave M.empty heap
             walled         = foldl' (\w c -> forceTile rules w 0 c) wf $ biomes M.! Wall
             collapsed = generateUntilValid rules walled s2
-        writePng "test1.png" $ makeImage rules collapsed 15
+            vertical       = generateImage (\x y -> PixelRGB8 0 0 0) 1 15
+            horizontal     = generateImage (\x y -> PixelRGB8 0 0 0) (15+1) 1
+            squared        = [below [tx', horizontal] | tx <- utiles rules, let tx' = beside [tx, vertical]]
+        writePng "test1.png" $ makeImage squared collapsed 15
 
     getBiomes :: Dungeon -> Map Cell [CoOrd]
     getBiomes = M.foldlWithKey' (\m c b -> M.insertWith (++) b [c] m) M.empty
