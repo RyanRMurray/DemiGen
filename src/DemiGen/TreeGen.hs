@@ -130,19 +130,12 @@ module DemiGen.TreeGen where
 ---------------------------------------------------------------------------------------------------
 
     randomChildren :: [Int] -> [Room] -> [Int] -> Int -> (DungeonTree, PureMT) -> (DungeonTree, PureMT)
-    randomChildren [] _ [] _ res = res
+    randomChildren _ _ [] _ res = res
     randomChildren ids rooms (budget:cs) maxChildren (res, s) =
         randomChildren i2 rooms cs maxChildren ((M.union res subTree), s2)
       where
         (i1,i2)       = splitAt budget ids
         (subTree, s2) = randomTree i1 rooms budget maxChildren s
-
-    generateIDs :: Int -> ([Int], PureMT) -> ([Int], PureMT)
-    generateIDs 0 res = res
-    generateIDs cnum (res,s) = 
-        generateIDs (cnum-1) (id:res, s2)
-      where
-        (id, s2) = randomInt s
 
     --given the number of children a node has, randomly distribute the budget used to generate the subtrees
     distributeBudget :: Int -> Int -> PureMT -> ([Int], PureMT)
@@ -172,60 +165,64 @@ module DemiGen.TreeGen where
         (r, s5)        = random rooms s4
         tree           = M.union children $ M.singleton i1 (Node r cids)
 
-    randomTrees :: [Int] -> [Room] -> Int -> Int -> PureMT -> ([DungeonTree], PureMT, [Int])
-    randomTrees ids rooms 1 budget s =
-        ([t], s2, i2)
+    randomTrees :: [Room] -> Int -> Int -> PureMT -> ([DungeonTree], PureMT)
+    randomTrees rooms 1 budget s =
+        ([t], s2)
       where
-        (i1, i2) = splitAt budget ids
-        (t,s2) = randomTree i1 rooms budget 5 s
+        (t,s2) = randomTree [0..] rooms budget 5 s
 
-    randomTrees ids rooms num budget s =
-        (t:ts,s3, i3)
+    randomTrees rooms num budget s =
+        (t:ts,s3)
       where
-        (i1,i2)    = splitAt budget ids
-        (t,s2) = randomTree i1 rooms budget 5 s
-        (ts,s3, i3) = randomTrees i2 rooms (num-1) budget s2 
+        (t,s2) = randomTree [0..] rooms budget 5 s
+        (ts,s3) = randomTrees rooms (num-1) budget s2 
 
 
 --tree mutation functions
 ---------------------------------------------------------------------------------------------------
 
-    crossover :: [Room] -> DungeonTree -> DungeonTree -> PureMT -> (DungeonTree, PureMT)
-    crossover _ donor recipient s =
-        (crossed, s4)
+    crossover _ _ r s = (r,s)
+
+    cressover :: [Room] -> DungeonTree -> DungeonTree -> PureMT -> (DungeonTree, PureMT)
+    cressover _ donor recipient s
+        | M.size toAdd == 1 = (M.insert rid (donor M.! did) recipient, s3)
+        | otherwise         = (crossed, s3)
       where
-        (did, s2)    = random (tail $ M.keys donor) s
-        (rid, s3)    = random (tail $ M.keys recipient) s2
+        (did, s2)    = random (M.keys donor) s
+        (rid, s3)    = random (M.keys recipient) s2
         toAdd        = getSubTree donor did
         toDelete     = getSubTree recipient rid
-        (rand, s4)   = randomInt s3
-        ids          = map abs [rand + (last $ M.keys donor) ..]
-        moddedNew    = foldl' reassignID toAdd $ zip (M.keys toAdd) ids
-        addNode      = moddedNew M.! (head ids)
-        crossed = 
+        ids          = [(fst $ M.findMax recipient) ..]
+        moddedAdd    = foldl' reassignID toAdd $ zip (M.keys toAdd) ids
+        addNode      = snd $ M.findMin moddedAdd
+        crossed =  
             M.insert rid addNode
-            $ M.union moddedNew
+            $ M.union ( M.deleteMin moddedAdd)
             $ M.difference recipient toDelete
 
     grow :: [Room] -> DungeonTree -> DungeonTree -> PureMT -> (DungeonTree, PureMT)
-    grow choices _ recipient s =
+    grow choices _ recipient s = 
         ( foldl' (\rx (i,a) -> M.insert i a rx) r2 $ zip ids toAdd
-        , snd $ randomInt $ snd $ randomInt s2
+        , snd $ randomInt $ snd $ randomInt s
         )
       where
         possible  = M.keys recipient
-        (rand, s2)= randomInt s
-        ids       = map abs $ take 4 [rand + (last $ M.keys recipient) ..]
-        toAdd     = map (\a -> Node a []) $ take 4 $ shuffle' choices (length choices) s2
-        toGrow    = head $ shuffle' possible (length possible) $ snd $ randomInt s2
+        ids       = take 4 [(fst $ M.findMax recipient) + 1..]
+        toAdd     = map (\a -> Node a []) $ take 4 $ shuffle' choices (length choices) s
+        toGrow    = head $ shuffle' possible (length possible) $ snd $ randomInt s
         r2        = addConns recipient toGrow ids
 
     trim :: [Room] -> DungeonTree -> DungeonTree -> PureMT -> (DungeonTree, PureMT)
-    trim _ _ recipient s =
-        (M.delete toRemove recipient, snd $ randomInt s)
+    trim _ _ recipient s = 
+        ( M.insert parent updated
+          $ M.delete chosen recipient
+        , s2
+        )
       where
-        leaves = M.keys $ M.filter (\(Node _ c) -> c == []) recipient
-        toRemove = head $ shuffle' leaves (length leaves) s
+        leaves = M.keys $ M.filter (\(Node _ cs) -> length cs == 0) recipient
+        (chosen, s2) = random leaves s
+        parent = getParent recipient chosen
+        updated = (\(Node r cs) -> Node r (delete chosen cs)) $ recipient M.! parent
 
     change :: [Room] -> DungeonTree -> DungeonTree -> PureMT -> (DungeonTree, PureMT)
     change choices _ recipient s =
@@ -242,7 +239,7 @@ module DemiGen.TreeGen where
         (muts,  s2) = randomFrom [([crossover], 7), ([], 3)] s
         (muts2, s3) = randomFrom [(muts ++ replicate 3 grow, 5), (muts, 5)] s2
         (muts3, s4) = randomFrom [(muts2 ++ [trim], 5), (muts2, 5)] s3
-        (muts4, s5) = randomFrom [(muts2 ++ replicate 2 change, 5), (muts2, 5)] s4
+        (muts4, s5) = randomFrom [(muts3 ++ replicate 2 change, 5), (muts3, 5)] s4
 
 --tree to dungeon functions
 ---------------------------------------------------------------------------------------------------
@@ -271,7 +268,7 @@ module DemiGen.TreeGen where
     treeToGenome deadend t =
         resolveTree deadend t startOu startDG startID startCs []
       where
-        startID = head $ M.keys t
+        startID = fst $ M.findMin t
         startDG = insertRoom M.empty $ room $ t M.! startID
         startCs = getConns t startID
         startOu = M.insert startID (Node (fromJust $ getRoom t startID) []) M.empty
@@ -321,8 +318,8 @@ module DemiGen.TreeGen where
         ([first, second, child1, child2],s3)
       where
         !(first:second:_) = (map fst) . reverse $ sortOn snd [(t, scoreF t) | t <- competitors]
-        (child1,s2)      = mutate rooms first second s
-        (child2,s3)      = mutate rooms second first s2
+        !(child1,s2)      = mutate rooms first second s
+        !(child2,s3)      = mutate rooms second first s2
 
 
     targetSize :: Int -> DungeonTree -> Int
@@ -427,7 +424,7 @@ module DemiGen.TreeGen where
     test = do
         rooms <- allRooms
         s     <- newPureMT
-        let (pop1,s1, ids) = randomTrees [0..] rooms 400 100 s
+        let (pop1,s1) = randomTrees rooms 400 100 s
             (x,   sx) = geneticDungeon 10 (targetSize 100) pop1 rooms s1
         printRawDungeon "dungeonRawOut.png" $ embiggenDungeon None x
 

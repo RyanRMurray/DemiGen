@@ -12,6 +12,7 @@ module DemiGen.Types where
 
     import           System.Random.Mersenne.Pure64
     import           System.Random.Shuffle
+    import Debug.Trace
 
 
 --Random selection
@@ -166,6 +167,9 @@ module DemiGen.Types where
     getConns :: DungeonTree -> Int -> [Int]
     getConns t id = connections $ t M.! id 
 
+    getParent :: DungeonTree -> Int -> Int
+    getParent t c =
+        head $ filter (\k -> elem c (getConns t k)) $ M.keys t
 
     getSubTree :: DungeonTree -> Int -> DungeonTree
     getSubTree t toGet

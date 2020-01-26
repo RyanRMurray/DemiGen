@@ -23,7 +23,7 @@ module Main where
         rooms <- allRooms
         s     <- newPureMT
         Right input <- readPng "./assets/sources/sewer.png"
-        let (pop1,s1, ids) = randomTrees [0..] rooms 400 100 s
+        let (pop1,s1) = randomTrees rooms 400 100 s
             (dt,   s2) = geneticDungeon 20 (targetSize 100) pop1 rooms s1
             dg             = embiggenDungeon None dt
             biomes         = getBiomes dg
