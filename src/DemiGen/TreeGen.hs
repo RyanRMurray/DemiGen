@@ -248,7 +248,7 @@ module DemiGen.TreeGen where
     purgeDoors t =
         M.map purge t
       where
-        purge (Node(Room r ti d) c) = Node (Room r ti (filter (\(_,ty) -> ty /= Open) d)) c
+        purge (Node(Room r ti d) c) = Node (Room r ti (filter (\(_,c) -> c /= Open) d)) c
 
     resolveTree :: RoomType -> DungeonTree -> DungeonTree -> Dungeon -> Int -> [Int] -> [Int] -> DungeonTree
     resolveTree deadend _ out _ _ [] [] = out
@@ -271,7 +271,7 @@ module DemiGen.TreeGen where
         croom = fromJust $ msum [getRoom output c, getRoom input c]
 
     treeToGenome :: RoomType -> DungeonTree -> DungeonTree
-    treeToGenome deadend t = purgeDoors $ 
+    treeToGenome deadend t =
         resolveTree deadend t startOu startDG startID startCs []
       where
         startID = fst $ M.findMin t
