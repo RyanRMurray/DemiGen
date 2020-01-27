@@ -244,6 +244,12 @@ module DemiGen.TreeGen where
 --tree to dungeon functions
 ---------------------------------------------------------------------------------------------------
 
+    purgeDoors :: DungeonTree -> DungeonTree
+    purgeDoors t =
+        M.map purge t
+      where
+        purge (Node(Room r ti d) c) = Node (Room r ti (filter (\(_,ty) -> ty /= Open) d)) c
+
     resolveTree :: RoomType -> DungeonTree -> DungeonTree -> Dungeon -> Int -> [Int] -> [Int] -> DungeonTree
     resolveTree deadend _ out _ _ [] [] = out
 
@@ -265,7 +271,7 @@ module DemiGen.TreeGen where
         croom = fromJust $ msum [getRoom output c, getRoom input c]
 
     treeToGenome :: RoomType -> DungeonTree -> DungeonTree
-    treeToGenome deadend t =
+    treeToGenome deadend t = purgeDoors $ 
         resolveTree deadend t startOu startDG startID startCs []
       where
         startID = fst $ M.findMin t
@@ -329,6 +335,14 @@ module DemiGen.TreeGen where
         | otherwise  = 0
       where
         s = M.size $ treeToGenome None t
+
+    valtchanBrown :: DungeonTree -> Int
+    valtchanBrown t =
+        undefined
+      where
+        resolved = treeToGenome Special t
+        specials = M.size $ M.filter (\(Node (Room rt _ _) _) -> rt == Special) t
+
 
 
 --Prepare dungeon for room content generation
