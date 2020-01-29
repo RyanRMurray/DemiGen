@@ -24,7 +24,7 @@ module Main where
         s     <- newPureMT
         Right input <- readPng "./assets/sources/sewer.png"
         let (pop1,s1) = randomTrees rooms 400 100 s
-            (dt,   s2) = geneticDungeon 20 (targetSize 100) pop1 rooms s1
+            (dt,   s2) = geneticDungeon 40 (valtchanBrown 100) pop1 rooms s1
             dg             = embiggenDungeon None dt
             biomes         = getBiomes dg
             rules          = parseRules (convertRGB8 input) 15 withRotations

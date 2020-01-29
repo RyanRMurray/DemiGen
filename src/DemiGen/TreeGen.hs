@@ -150,7 +150,7 @@ module DemiGen.TreeGen where
 
     randomTree :: [Int] -> [Room] -> Int -> Int -> PureMT -> (DungeonTree, PureMT)
     randomTree [id] rooms 1 _ s = 
-        (M.singleton id (Node r []), s2)
+        (M.singleton id (Node r S.empty), s2)
       where
         (r, s2) = random rooms s
 
@@ -163,7 +163,7 @@ module DemiGen.TreeGen where
         cids           = init $ scanl (+) (i1 + 1) cBudgets
         (children, s4) = randomChildren i2 rooms cBudgets maxChildren (M.empty, s3)
         (r, s5)        = random rooms s4
-        tree           = M.union children $ M.singleton i1 (Node r cids)
+        tree           = M.union children $ M.singleton i1 (Node r $ S.fromList cids)
 
     randomTrees :: [Room] -> Int -> Int -> PureMT -> ([DungeonTree], PureMT)
     randomTrees rooms 1 budget s =
@@ -208,9 +208,9 @@ module DemiGen.TreeGen where
       where
         possible  = M.keys recipient
         ids       = take 4 [(fst $ M.findMax recipient) + 1..]
-        toAdd     = map (\a -> Node a []) $ take 4 $ shuffle' choices (length choices) s
+        toAdd     = map (\a -> Node a S.empty) $ take 4 $ shuffle' choices (length choices) s
         toGrow    = head $ shuffle' possible (length possible) $ snd $ randomInt s
-        r2        = addConns recipient toGrow ids
+        r2        = addChildren recipient toGrow $ S.fromList ids
 
     trim :: [Room] -> DungeonTree -> DungeonTree -> PureMT -> (DungeonTree, PureMT)
     trim _ _ recipient s = 
@@ -222,7 +222,7 @@ module DemiGen.TreeGen where
         leaves = M.keys $ M.filter (\(Node _ cs) -> length cs == 0) recipient
         (chosen, s2) = random leaves s
         parent = getParent recipient chosen
-        updated = (\(Node r cs) -> Node r (delete chosen cs)) $ recipient M.! parent
+        updated = (\(Node r cs) -> Node r (S.delete chosen cs)) $ recipient M.! parent
 
     change :: [Room] -> DungeonTree -> DungeonTree -> PureMT -> (DungeonTree, PureMT)
     change choices _ recipient s =
@@ -250,34 +250,44 @@ module DemiGen.TreeGen where
       where
         purge (Node(Room r ti d) c) = Node (Room r ti (filter (\(_,c) -> c /= Open) d)) c
 
+    purgeUnused :: DungeonTree -> DungeonTree
+    purgeUnused t =
+        M.map (\(Node r cs) -> Node r $ S.intersection cs nodes) t
+      where
+        nodes   = S.fromList $ M.keys t
+
     resolveTree :: RoomType -> DungeonTree -> DungeonTree -> Dungeon -> Int -> [Int] -> [Int] -> DungeonTree
     resolveTree deadend _ out _ _ [] [] = out
 
     resolveTree deadend input out dg _ [] (n:ns) =
         resolveTree deadend input out dg n nextCs ns
       where
-        nextCs = getConns input n
+        nextCs = S.toList $ getChildren input n
 
     resolveTree deadend input output dg p (c:cs) next =
           case insertChildRoom dg (proom, p) (croom, c) of
               Nothing -> resolveTree deadend input output dg p cs next
               Just (d2, p2, c2) -> resolveTree deadend input o2 d2 p cs (c:next)
                 where
-                  o2 =  addConns 
-                          (M.insert c (Node c2 (getConns input c)) output)
-                          p [c]
-      where
+                  o2 =  alterRoom 
+                          (addChildren 
+                            (M.insert c (Node c2 (getChildren input c)) output)
+                            p
+                            $ S.singleton c
+                          )
+                          p p2
+      where   
         proom = fromJust $ msum [getRoom output p, getRoom input p]
         croom = fromJust $ msum [getRoom output c, getRoom input c]
 
     treeToGenome :: RoomType -> DungeonTree -> DungeonTree
-    treeToGenome deadend t =
-        resolveTree deadend t startOu startDG startID startCs []
+    treeToGenome deadend t = purgeDoors $ purgeUnused res
       where
         startID = fst $ M.findMin t
         startDG = insertRoom M.empty $ room $ t M.! startID
-        startCs = getConns t startID
-        startOu = M.insert startID (Node (fromJust $ getRoom t startID) []) M.empty
+        startCs = S.toList $ getChildren t startID
+        startOu = M.insert startID (Node (fromJust $ getRoom t startID) S.empty) M.empty
+        res     = resolveTree deadend t startOu startDG startID startCs []
 
 
     --take a set of rooms and create a Dungeon
@@ -336,13 +346,26 @@ module DemiGen.TreeGen where
       where
         s = M.size $ treeToGenome None t
 
-    valtchanBrown :: DungeonTree -> Int
-    valtchanBrown t =
-        undefined
+
+    valtchanBrown :: Int -> DungeonTree -> Int
+    valtchanBrown max t
+        | M.findWithDefault 0 Special nums > 3 = 0
+        | M.size t > max       = 0
+        | otherwise            = (+) (M.size resolved) $ sum [scoreRoom i | i <- M.keys merged]
       where
         resolved = treeToGenome Special t
-        specials = M.size $ M.filter (\(Node (Room rt _ _) _) -> rt == Special) t
-
+        merged   = purgeUnused $ mergeHalls resolved
+        nums     = M.foldl' (\m (Node (Room rt _ _) _) -> M.insertWith (+) rt 1 m) M.empty resolved
+        scoreRoom i 
+            | pType == Hall && (length cTypes) < 2        = 0
+            | pType == Hall                               = length $ take 5 cTypes
+            | pType == Normal && normalReward             = 5
+            | pType == Special && (stepsTo merged i > 10) = 5
+            | otherwise                                   = 0
+          where
+            pType        = rType $ room $ merged M.! i
+            cTypes       = map (\ci -> rType $ room $ merged M.! ci) $ filter (\ci -> M.member ci merged) $ getConnections merged i
+            normalReward = (filter (==Hall) cTypes) /= [] && (filter (/=Hall) cTypes) /= []
 
 
 --Prepare dungeon for room content generation
@@ -442,11 +465,3 @@ module DemiGen.TreeGen where
         let (pop1,s1) = randomTrees rooms 400 100 s
             (x,   sx) = geneticDungeon 10 (targetSize 100) pop1 rooms s1
         printRawDungeon "dungeonRawOut.png" $ embiggenDungeon None x
-
-
-    traceIDs :: DungeonTree -> [Int] -> [[Int]]
-    traceIDs t tocheck
-        | children == [] = []
-        | otherwise = tocheck : traceIDs t children
-      where
-        children = concat $ map (getConns t) tocheck
