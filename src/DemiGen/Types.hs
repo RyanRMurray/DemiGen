@@ -180,8 +180,12 @@ module DemiGen.Types where
         $ doors $ room $ t M.! i
 
     getParent :: DungeonTree -> Int -> Int
-    getParent t c =
-        head $ filter (\k -> elem c (getChildren t k)) $ M.keys t
+    getParent t 0 = 0
+    getParent t c 
+        | x == [] = c
+        | otherwise = head x
+      where
+        x = filter (\k -> elem c (getChildren t k)) $ M.keys t
 
     getSubTree :: DungeonTree -> Int -> DungeonTree
     getSubTree t toGet

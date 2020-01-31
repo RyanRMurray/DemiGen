@@ -181,24 +181,22 @@ module DemiGen.TreeGen where
 --tree mutation functions
 ---------------------------------------------------------------------------------------------------
 
-    crossover _ _ r s = (r,s)
-
-    cressover :: [Room] -> DungeonTree -> DungeonTree -> PureMT -> (DungeonTree, PureMT)
-    cressover _ donor recipient s
-        | M.size toAdd == 1 = (M.insert rid (donor M.! did) recipient, s3)
-        | otherwise         = (crossed, s3)
+    crossover :: [Room] -> DungeonTree -> DungeonTree -> PureMT -> (DungeonTree, PureMT)
+    crossover _ donor recipient s =
+        (purgeUnused updated, s3)
       where
-        (did, s2)    = random (M.keys donor) s
-        (rid, s3)    = random (M.keys recipient) s2
-        toAdd        = getSubTree donor did
-        toDelete     = getSubTree recipient rid
-        ids          = filter (\i -> M.notMember i recipient) [(fst $ M.findMax recipient) ..]
-        moddedAdd    = foldl' reassignID toAdd $ zip (M.keys toAdd) ids
-        addNode      = snd $ M.findMin moddedAdd
-        crossed =  
-            M.insert rid addNode
-            $ M.union ( M.deleteMin moddedAdd)
-            $ M.difference recipient toDelete
+        (dNode, s2) = random (tail $ M.keys donor) s
+        (rNode, s3) = random (tail $ M.keys recipient) s2
+        toAdd       = getSubTree donor dNode
+        toDelete    = getSubTree recipient rNode
+        idStart     = max (fst $ M.findMax donor) (fst $ M.findMax recipient)
+        swapIDs     = tail $ zip (M.keys toAdd) [idStart + 1..]
+        swapped     = foldl' reassignID toAdd swapIDs
+        updated     = flip 
+            M.union 
+              (reassignID swapped (dNode, rNode)) 
+              (M.difference recipient toDelete)
+
 
     grow :: [Room] -> DungeonTree -> DungeonTree -> PureMT -> (DungeonTree, PureMT)
     grow choices _ recipient s = 
@@ -248,7 +246,13 @@ module DemiGen.TreeGen where
     purgeDoors t =
         M.map purge t
       where
-        purge (Node(Room r ti d) c) = Node (Room r ti (filter (\(_,c) -> c /= Open) d)) c
+        unusedDoors d = S.fromList $ map fst $ filter (\(_,c) -> c == Open) d
+        purge (Node(Room r ti d) c) = 
+            Node 
+              ( Room r 
+                (S.difference ti $ unusedDoors d) 
+                (filter (\(_,c) -> c /= Open) d)
+              ) c
 
     purgeUnused :: DungeonTree -> DungeonTree
     purgeUnused t =
@@ -259,9 +263,11 @@ module DemiGen.TreeGen where
     resolveTree :: RoomType -> DungeonTree -> DungeonTree -> Dungeon -> Int -> [Int] -> [Int] -> DungeonTree
     resolveTree deadend _ out _ _ [] [] = out
 
-    resolveTree deadend input out dg _ [] (n:ns) =
-        resolveTree deadend input out dg n nextCs ns
+    resolveTree deadend input out dg _ [] (n:ns)
+        | rt == deadend = resolveTree deadend input out dg n [] ns
+        | otherwise     = resolveTree deadend input out dg n nextCs ns
       where
+        rt     = rType $ room (input M.! n)
         nextCs = S.toList $ getChildren input n
 
     resolveTree deadend input output dg p (c:cs) next =
@@ -351,16 +357,16 @@ module DemiGen.TreeGen where
     valtchanBrown max t
         | M.findWithDefault 0 Special nums > 3 = 0
         | M.size t > max       = 0
-        | otherwise            = (+) (M.size resolved) $ sum [scoreRoom i | i <- M.keys merged]
+        | otherwise            = (M.size resolved) + (sum [scoreRoom i | i <- M.keys merged]) - (M.findWithDefault 0 Hall nums)
       where
         resolved = treeToGenome Special t
         merged   = purgeUnused $ mergeHalls resolved
         nums     = M.foldl' (\m (Node (Room rt _ _) _) -> M.insertWith (+) rt 1 m) M.empty resolved
         scoreRoom i 
             | pType == Hall && (length cTypes) < 2        = 0
-            | pType == Hall                               = length $ take 5 cTypes
-            | pType == Normal && normalReward             = 5
-            | pType == Special && (stepsTo merged i > 10) = 5
+            | pType == Hall                               = (*) 10 $ length $ take 5 cTypes
+            | pType == Normal && normalReward             = 50
+            | pType == Special && (stepsTo merged i > 10) = 50
             | otherwise                                   = 0
           where
             pType        = rType $ room $ merged M.! i
@@ -463,5 +469,5 @@ module DemiGen.TreeGen where
         rooms <- allRooms
         s     <- newPureMT
         let (pop1,s1) = randomTrees rooms 400 100 s
-            (x,   sx) = geneticDungeon 10 (targetSize 100) pop1 rooms s1
-        printRawDungeon "dungeonRawOut.png" $ embiggenDungeon None x
+            (x,   sx) = geneticDungeon 40 (valtchanBrown 100) pop1 rooms s1
+        printRawDungeon "dungeonRawOut.png" $ embiggenDungeon Special x
