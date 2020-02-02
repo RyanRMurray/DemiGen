@@ -194,10 +194,6 @@ module DemiGen.Types where
       where
         children = concat $ map (S.toList . getChildren t) tocheck
 
-    stepsTo :: DungeonTree -> Int -> Int
-    stepsTo t i = case findIndex (\l -> elem i l) $ traceIDs t [0] of
-        Nothing -> -1
-        Just x  ->  x
 
     reassignID :: DungeonTree -> (Int, Int) -> DungeonTree
     reassignID t (old, new)
@@ -214,30 +210,41 @@ module DemiGen.Types where
     symDiff :: (Ord a) => Set a -> Set a -> Set a
     symDiff a b = S.difference (S.union a b) (S.intersection a b)
 
-    mergeNodes :: DungeonTree -> Int -> Int -> DungeonTree
-    mergeNodes t a b =
-        M.delete b
-        $ M.insert a (Node (Room rt tiles doors) conns) t
+    replaceConns :: Map CoOrd (Set Int) -> Int -> Int -> Map CoOrd (Set Int)
+    replaceConns before old new = M.map alter before
       where
-        (Node (Room rt tia da) ca) = t M.! a
-        (Node (Room _  tib db) cb) = t M.! b
-        tiles = S.union tia tib
-        doors = da ++ db
-        conns = S.delete b $ S.union ca cb
+        alter s
+            | S.notMember old s = s
+            | otherwise = S.insert new $ S.delete old s
+    
+    mergeInGenome :: Genome -> Int -> Int -> Genome
+    mergeInGenome Genome{..} pid cid =
+        Genome
+            (M.insert pid (Node (Room rt nt nd) nc) $ M.delete cid tree)
+            dungeon
+            conn
+      where
+        (Node (Room rt pt pd) pc) = tree M.! pid
+        (Node (Room _  ct cd) cc) = tree M.! cid 
+        nt   = S.union pt ct
+        nd   = S.toList $ symDiff (S.fromList pd) (S.fromList cd)
+        nc   = S.union pc cc
+        conn = replaceConns connections cid pid
 
     mergeHalls :: Genome -> Genome
-    mergeHalls g@Genome{..}
-        | unfused == [] = g
-        | otherwise     = mergeHalls (Genome fusePass dungeon connections)
+    mergeHalls before@(Genome t d c)
+        | toFuse == [] = before
+        | otherwise    = foldl' fuseChildren before toFuse
       where
-        unfused = reverse $ M.keys $ M.filter (\(Node (Room rt _ _) cs) -> rt == Hall && hasChildHall cs) tree
-        hasChildHall conns = or $ map (\c -> (rType $ room $ tree M.! c) == Hall) $ S.toList conns
-        tryFuse tx i = case children <$> tree M.!? i of
-            Nothing -> tx
-            Just cs -> 
-                foldl' (\txx ci -> mergeNodes txx i ci) tx
-                $ S.filter (\ci -> (rType $ room $ tx M.! ci) == Hall) cs
-        fusePass = foldl' tryFuse tree unfused
+        halls = M.keys $ M.filter (\n -> Hall == (rType . room $ n)) t
+        toFuse = filter (\(_,n) -> not $ S.null n) $ map (\x -> (x,hallNeighbours x)) $ halls
+        hallNeighbours i = S.delete i $ 
+            S.filter (\x -> Hall == (rType . room $ t M.! x))
+            $ S.unions $ map (\x -> M.findWithDefault S.empty x c) (doors . room $ t M.! i)
+        fuse p g c
+            | M.member p (tree g) && M.member c (tree g) = mergeInGenome g p c
+            | otherwise                                  = g 
+        fuseChildren g (p,cs) = foldl' (fuse p) g cs
 
 
     doorPixel :: PixelRGB8

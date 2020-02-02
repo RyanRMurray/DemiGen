@@ -104,7 +104,12 @@ module DemiGen.TreeGen where
     insertChildRoom :: Genome -> (Room, Int) -> (Room, Int) -> Maybe Genome
     insertChildRoom Genome{..} (parent, pid) (child, cid) = do
         let rotations = [rotateRoom child rot | rot <- [0..3]]
-            offsets   = [ (offsetRoom r (px-cx) (py-cy), Just (px,py)) | r <- rotations, (cx,cy) <- doors r, (px,py) <- doors parent]
+            offsets   = [ (offsetRoom r (px-cx) (py-cy), Just (px,py)) 
+                        | r <- rotations
+                        , (cx,cy) <- doors r
+                        , (px,py) <- doors parent
+                        , dungeon M.!? (cx,cy) /= Just Occupied
+                        ]
         (newD, newChild) <- msum $ map (attemptAttach dungeon) offsets
         let conn      = head $ L.intersect (doors parent) (doors newChild)
         Just $ Genome
@@ -175,8 +180,9 @@ module DemiGen.TreeGen where
 ---------------------------------------------------------------------------------------------------
 
     crossover :: [Room] -> DungeonTree -> DungeonTree -> PureMT -> (DungeonTree, PureMT)
-    crossover _ donor recipient s =
-        (purgeUnused updated, s3)
+    crossover _ donor recipient s 
+        | (M.size donor) > 3 && (M.size recipient) > 3 = (purgeUnused updated, s3)
+        | otherwise = (recipient, s)
       where
         (dNode, s2) = random (tail $ M.keys donor) s
         (rNode, s3) = random (tail $ M.keys recipient) s2
@@ -342,7 +348,7 @@ module DemiGen.TreeGen where
             | pType == Hall && (length cTypes) < 2        = 0
             | pType == Hall                               = (*) 10 $ length $ take 5 cTypes
             | pType == Normal && normalReward             = 50
-            | pType == Special && (stepsTo (tree merged) i > 10) = 50
+            | pType == Special  = 50
             | otherwise                                   = 0
           where
             pRoom        = room $ (tree merged) M.! i
@@ -445,5 +451,5 @@ module DemiGen.TreeGen where
         rooms <- allRooms
         s     <- newPureMT
         let (pop1,s1) = randomTrees rooms 400 100 s
-            (x,   sx) = geneticDungeon 40 (valtchanBrown 100) pop1 rooms s1
-        printRawDungeon "dungeonRawOut.png" $ dungeon $ treeToGenome Special x
+            (x,   sx) = geneticDungeon 20 (valtchanBrown 100) pop1 rooms s1
+        printRawDungeon "dungeonRawOut.png" $ embiggenDungeon $ treeToGenome Special x
