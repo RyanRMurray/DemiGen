@@ -345,7 +345,7 @@ module DemiGen.TreeGen where
         merged   = mergeHalls resolved
         nums     = M.foldl' (\m (Node (Room rt _ _) _) -> M.insertWith (+) rt 1 m) M.empty (tree resolved)
         scoreRoom i 
-            | pType == Hall && (length cTypes) < 2        = 0
+            | pType == Hall && (length cTypes) < 3        = 0
             | pType == Hall                               = (*) 10 $ length $ take 5 cTypes
             | pType == Normal && normalReward             = 50
             | pType == Special  = 50
