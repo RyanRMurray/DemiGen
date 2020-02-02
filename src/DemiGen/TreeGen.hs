@@ -51,8 +51,8 @@ module DemiGen.TreeGen where
     --Parse an image to create a room object
     getRoomData :: RoomType -> TileImg -> Room
     getRoomData rtype input = Room rtype
-        (S.fromList $ floor ++ doors) $ 
-        [(d, Open) | d <- doors]
+        (S.fromList $ floor) $ 
+        doors
       where
         floor = getTargetPixels input tilePixel
         doors = getTargetPixels input doorPixel
@@ -78,53 +78,46 @@ module DemiGen.TreeGen where
     rotateRoom r 3 = rotateRoom' r (\(x,y) -> (12 - y, x))      
 
     rotateRoom' Room{..} f = Room rType
-        (S.map f $ tiles) $
-        L.map 
-            (\(coord, c) -> (f coord, c)) 
-            $ doors
+        (S.map f tiles) $
+        (L.map f doors) 
 
     offsetRoom :: Room -> Int -> Int -> Room
     offsetRoom Room{..} ox oy = Room rType
-              (S.map (\ (x,y)  -> (x+ox,y+oy)   ) tiles)
-            $ L.map (\((x,y),c)->((x+ox,y+oy),c)) doors
+        (S.map (\(x,y) -> (x+ox,y+oy)) tiles)
+        (L.map (\(x,y) -> (x+ox,y+oy)) doors)
 
     noCollision :: Dungeon -> Room -> CoOrd -> Bool
     noCollision d Room{..} (ox,oy) = 
-        and [isFree d (x+ox,y+oy) | (x,y) <- S.toList tiles]
+        and [M.notMember (x+ox,y+oy) d| (x,y) <- S.toList tiles]
     
     isFree d c = d M.!? c /= Just Occupied
-
-    findValidDoor :: Dungeon -> Room -> Maybe CoOrd
-    findValidDoor d Room{..}
-        | length valid /= 0 = Just $ fst $ head valid
-        | otherwise         = Nothing
-      where
-        valid = L.filter (\d -> snd d == Open) doors
         
-    insertRoom :: Dungeon -> Room -> Dungeon
-    insertRoom d r =
-        L.foldl (\dg c -> M.insert c Conn dg) d2 $ L.map fst $ doors r
+    insertRoom :: Dungeon -> (Room, (Maybe CoOrd)) -> Dungeon
+    insertRoom dg (r,Nothing) = S.foldl (\dg c -> M.insert c Occupied dg) dg (tiles r)
+
+    insertRoom dg (r, Just d) =
+          M.insert d Conn d2
         where
-            d2 = S.foldl (\dg c -> M.insert c Occupied dg) d (tiles r)
-
-    --Take a dungeon and a pair of rooms, if it is possible to attach the child room to the parent, return the updated dungeon
-    insertChildRoom :: Dungeon -> (Room, Int) -> (Room, Int) -> Maybe (Dungeon, Room, Room)
-    insertChildRoom d (parent, pid) (child, cid) = do
-        (tx,ty) <- findValidDoor d parent
-        let rotations     = [rotateRoom child rot | rot <- [0..3]]
-            offsets       = [offsetRoom (setConn r pid (x,y)) (tx-x) (ty-y) | r <- rotations, ((x,y),_) <- doors r]
-        (newD, newChild) <- msum [attemptAttach d r | r <- offsets]        
-        Just (newD, setConn parent cid (tx,ty), newChild)
+            d2 = S.foldl (\dg c -> M.insert c Occupied dg) dg (tiles r)
 
 
-    attemptAttach :: Dungeon -> Room -> Maybe (Dungeon, Room)
-    attemptAttach d r 
-        | noCollision d r (0,0) = Just (insertRoom d r, r)
+    insertChildRoom :: Genome -> (Room, Int) -> (Room, Int) -> Maybe Genome
+    insertChildRoom Genome{..} (parent, pid) (child, cid) = do
+        let rotations = [rotateRoom child rot | rot <- [0..3]]
+            offsets   = [ (offsetRoom r (px-cx) (py-cy), Just (px,py)) | r <- rotations, (cx,cy) <- doors r, (px,py) <- doors parent]
+        (newD, newChild) <- msum $ map (attemptAttach dungeon) offsets
+        let conn      = head $ L.intersect (doors parent) (doors newChild)
+        Just $ Genome
+            (M.insert cid (Node newChild S.empty) $ addChildren tree pid (S.singleton cid))
+            newD
+            (foldl' (\c d -> M.insertWith (S.union) d (S.singleton cid) c) connections $ doors newChild)
+
+
+    attemptAttach :: Dungeon -> (Room, Maybe CoOrd) -> Maybe (Dungeon, Room)
+    attemptAttach d (r,at) 
+        | noCollision d r (0,0) = Just (insertRoom d (r,at), r)
         | otherwise             = Nothing
 
-    setConn ::  Room -> Int -> CoOrd -> Room
-    setConn Room{..} toID door =
-        Room rType tiles $ (door, To toID) : [(c, t) | (c,t) <- doors, c /= door]
           
 --random tree generator
 ---------------------------------------------------------------------------------------------------
@@ -242,17 +235,13 @@ module DemiGen.TreeGen where
 --tree to dungeon functions
 ---------------------------------------------------------------------------------------------------
 
-    purgeDoors :: DungeonTree -> DungeonTree
-    purgeDoors t =
-        M.map purge t
+    purgeDoors :: Genome -> Genome
+    purgeDoors Genome{..} =
+        Genome tree dungeon used
       where
-        unusedDoors d = S.fromList $ map fst $ filter (\(_,c) -> c == Open) d
-        purge (Node(Room r ti d) c) = 
-            Node 
-              ( Room r 
-                (S.difference ti $ unusedDoors d) 
-                (filter (\(_,c) -> c /= Open) d)
-              ) c
+        used = M.filter (\x -> S.size x /= 1) $ connections
+        --purged = M.filterWithKey (\k v -> v /= Conn || M.member k used) dungeon
+
 
     purgeUnused :: DungeonTree -> DungeonTree
     purgeUnused t =
@@ -260,46 +249,33 @@ module DemiGen.TreeGen where
       where
         nodes   = S.fromList $ M.keys t
 
-    resolveTree :: RoomType -> DungeonTree -> DungeonTree -> Dungeon -> Int -> [Int] -> [Int] -> DungeonTree
-    resolveTree deadend _ out _ _ [] [] = out
+    resolveTree :: RoomType -> DungeonTree -> Genome -> Int -> [Int] -> [Int] -> Genome
+    resolveTree deadend _ out _ [] [] = out
 
-    resolveTree deadend input out dg _ [] (n:ns)
-        | rt == deadend = resolveTree deadend input out dg n [] ns
-        | otherwise     = resolveTree deadend input out dg n nextCs ns
+    resolveTree deadend input out _ [] (n:ns)
+        | rt == deadend = resolveTree deadend input out n [] ns
+        | otherwise     = resolveTree deadend input out n nextCs ns
       where
         rt     = rType $ room (input M.! n)
         nextCs = S.toList $ getChildren input n
 
-    resolveTree deadend input output dg p (c:cs) next =
-          case insertChildRoom dg (proom, p) (croom, c) of
-              Nothing -> resolveTree deadend input output dg p cs next
-              Just (d2, p2, c2) -> resolveTree deadend input o2 d2 p cs (c:next)
-                where
-                  o2 =  alterRoom 
-                          (addChildren 
-                            (M.insert c (Node c2 (getChildren input c)) output)
-                            p
-                            $ S.singleton c
-                          )
-                          p p2
+    resolveTree deadend input output p (c:cs) next =
+          case insertChildRoom output (proom, p) (croom, c) of
+              Nothing -> resolveTree deadend input output p cs next
+              Just o2 -> resolveTree deadend input o2 p cs (c:next)
       where   
-        proom = fromJust $ msum [getRoom output p, getRoom input p]
-        croom = fromJust $ msum [getRoom output c, getRoom input c]
+        proom = fromJust $ getRoom (tree output) p
+        croom = fromJust $ getRoom input c
 
-    treeToGenome :: RoomType -> DungeonTree -> DungeonTree
-    treeToGenome deadend t = purgeDoors $ purgeUnused res
+    treeToGenome :: RoomType -> DungeonTree -> Genome
+    treeToGenome deadend t = purgeDoors $ res
       where
-        startID = fst $ M.findMin t
-        startDG = insertRoom M.empty $ room $ t M.! startID
-        startCs = S.toList $ getChildren t startID
-        startOu = M.insert startID (Node (fromJust $ getRoom t startID) S.empty) M.empty
-        res     = resolveTree deadend t startOu startDG startID startCs []
+        startDG = insertRoom M.empty $ (room $ t M.! 0, Nothing)
+        startChildren = S.toList $ getChildren t 0
+        startOTree    = M.insert 0 (Node (room $ t M.! 0) S.empty) M.empty
+        startConns    = foldl' (\m x -> M.insert x (S.singleton 0) m) M.empty $ doors $ room $ t M.! 0
+        res     = resolveTree deadend t (Genome startOTree startDG startConns) 0 startChildren []
 
-
-    --take a set of rooms and create a Dungeon
-    genomeToDungeon :: DungeonTree -> Dungeon
-    genomeToDungeon =
-        M.foldl' (\d (Node r _) -> insertRoom d r) M.empty
 
 --various fitness functions
 ---------------------------------------------------------------------------------------------------
@@ -350,27 +326,30 @@ module DemiGen.TreeGen where
         | s < target = s
         | otherwise  = 0
       where
-        s = M.size $ treeToGenome None t
+        s = M.size $ tree $ treeToGenome None t
 
 
     valtchanBrown :: Int -> DungeonTree -> Int
     valtchanBrown max t
         | M.findWithDefault 0 Special nums > 3 = 0
         | M.size t > max       = 0
-        | otherwise            = (M.size resolved) + (sum [scoreRoom i | i <- M.keys merged]) - (M.findWithDefault 0 Hall nums)
+        | otherwise            = (M.size (tree resolved)) + (sum [scoreRoom i | i <- M.keys (tree merged)]) - (M.findWithDefault 0 Hall nums)
       where
         resolved = treeToGenome Special t
-        merged   = purgeUnused $ mergeHalls resolved
-        nums     = M.foldl' (\m (Node (Room rt _ _) _) -> M.insertWith (+) rt 1 m) M.empty resolved
+        merged   = mergeHalls resolved
+        nums     = M.foldl' (\m (Node (Room rt _ _) _) -> M.insertWith (+) rt 1 m) M.empty (tree resolved)
         scoreRoom i 
             | pType == Hall && (length cTypes) < 2        = 0
             | pType == Hall                               = (*) 10 $ length $ take 5 cTypes
             | pType == Normal && normalReward             = 50
-            | pType == Special && (stepsTo merged i > 10) = 50
+            | pType == Special && (stepsTo (tree merged) i > 10) = 50
             | otherwise                                   = 0
           where
-            pType        = rType $ room $ merged M.! i
-            cTypes       = map (\ci -> rType $ room $ merged M.! ci) $ filter (\ci -> M.member ci merged) $ getConnections merged i
+            pRoom        = room $ (tree merged) M.! i
+            pType        = rType $ pRoom
+            connected    = S.delete i 
+                           $ foldl' (\s ci -> S.union s $ M.findWithDefault S.empty ci (connections merged)) S.empty (doors pRoom)
+            cTypes       = S.toList $ S.map (\ci -> rType $ room (tree merged M.! ci)) connected
             normalReward = (filter (==Hall) cTypes) /= [] && (filter (/=Hall) cTypes) /= []
 
 
@@ -390,24 +369,19 @@ module DemiGen.TreeGen where
     baseSeg :: Cell -> Dungeon
     baseSeg cell = M.fromList [((x,y),cell) | x <- [0..3], y<- [0..3]]
 
-    addWallsToSeg :: Room -> CoOrd -> Dungeon
-    addWallsToSeg Room{..} at =
+    addWallsToSeg ::  Map CoOrd (Set Int) -> Room -> CoOrd ->Dungeon
+    addWallsToSeg connections Room{..} at =
         M.mapKeys (\c -> (.+) (at .* 4) c)
         $ foldl' (\s c -> M.insert c Wall s) (baseSeg Floor) toAdd
       where
-        toAdd = concat 
-            $ map (side . fst) 
-            $ filter (\(_,c) -> S.notMember (at .+ c) tiles)
-            $ zip [1..] $ [(0,-1),(1,-1),(1,0),(1,1),(0,1),(-1,1),(-1,0),(-1,-1)]
+        usedDoors = filter (\d -> M.member d connections) doors
+        toAdd = concat
+          $ map (side . fst)
+          $ filter (\(_,c) -> S.notMember (at .+ c) tiles && notElem (at .+ c) usedDoors)
+          $ zip [1..] $ [(0,-1),(1,-1),(1,0),(1,1),(0,1),(-1,1),(-1,0),(-1,-1)]
 
-    addEmbiggenedRoom :: Dungeon -> Room -> Dungeon
-    addEmbiggenedRoom dg r@Room{..} =
-        foldl' (\d s -> M.union s d) dg
-        $ map (addWallsToSeg r) 
-        $ S.toList tiles
-
-    unsealDoor :: Dungeon -> CoOrd -> Dungeon
-    unsealDoor small at =
+    addWallsToDoor :: Set CoOrd -> CoOrd -> Dungeon
+    addWallsToDoor nTiles at =
         M.mapKeys (\c -> (.+) (at .* 4) c)
         $ foldl' (\s c -> M.insert c Wall s) (baseSeg Door) toAdd
       where
@@ -415,32 +389,33 @@ module DemiGen.TreeGen where
             $ map side
             $ (++) [2,4,6,8]
             $ map fst
-            $ filter (\(_,c) -> M.findWithDefault Empty (c .+ at) small == Empty)
+            $ filter (\(_,c) -> S.notMember (at .+ c) nTiles)
             $ zip [1,3..] $ [(0,-1),(1,0),(0,1),(-1,0)]
 
-    unsealDoors :: Dungeon -> Dungeon -> Dungeon
-    unsealDoors sealed ref =
-        foldl' (\d s -> M.union s d) sealed
-        $ map (unsealDoor ref) doors
+    addEmbiggenedRoom :: Genome -> Room -> Genome
+    addEmbiggenedRoom Genome{..} r@Room{..} = 
+        Genome tree d2 connections
       where
-        doors   = M.keys $ M.filter (== Conn) ref
-        
-    embiggenDungeon' :: DungeonTree -> Dungeon
-    embiggenDungeon' genome =
-        unsealDoors sealed dungeon
+        d2 =
+            foldl' (\d s -> M.union s d) dungeon
+            $ map (addWallsToSeg connections r)
+            $ S.toList tiles
+    
+    getConnectedRoomTiles :: DungeonTree -> Set Int -> Set CoOrd
+    getConnectedRoomTiles tree ids =
+        S.unions $ map (\i -> tiles $ room $ tree M.! i) $ S.toList ids
+
+    addEmbiggenedDoors :: Genome -> Dungeon
+    addEmbiggenedDoors Genome{..} = M.unions 
+        $ map (\(at, ts) -> addWallsToDoor ts at)
+        $ map (\(at, cs) -> (at, getConnectedRoomTiles tree cs)) $ M.toList connections
+
+    embiggenDungeon :: Genome -> Dungeon
+    embiggenDungeon g =
+        M.union floor doors
       where
-        dungeon = genomeToDungeon genome
-        sealed  = foldl' (\d (Node r _) -> addEmbiggenedRoom d r) M.empty genome
-
-
-    embiggenDungeon :: RoomType -> DungeonTree -> Dungeon
-    embiggenDungeon deadend tree =
-        unsealDoors sealed dungeon
-      where
-        genome  = treeToGenome deadend tree
-        dungeon = genomeToDungeon genome
-        sealed  = foldl' (\d (Node r _) -> addEmbiggenedRoom d r) M.empty genome
-
+        floor = dungeon $ foldl' addEmbiggenedRoom (Genome (tree g) M.empty (connections g)) $ map room $ M.elems $ tree g
+        doors = addEmbiggenedDoors g
 
 --test outputs
 ---------------------------------------------------------------------------------------------------
@@ -461,6 +436,7 @@ module DemiGen.TreeGen where
     printDungeonPixel :: Cell -> PixelRGB8
     printDungeonPixel Door = doorPixel
     printDungeonPixel Occupied = tilePixel
+    printDungeonPixel Conn = doorPixel
     printDungeonPixel Empty = PixelRGB8 255 255 255
     printDungeonPixel Wall = tilePixel
     printDungeonPixel Floor = PixelRGB8 100 100 100
@@ -470,4 +446,4 @@ module DemiGen.TreeGen where
         s     <- newPureMT
         let (pop1,s1) = randomTrees rooms 400 100 s
             (x,   sx) = geneticDungeon 40 (valtchanBrown 100) pop1 rooms s1
-        printRawDungeon "dungeonRawOut.png" $ embiggenDungeon Special x
+        printRawDungeon "dungeonRawOut.png" $ dungeon $ treeToGenome Special x

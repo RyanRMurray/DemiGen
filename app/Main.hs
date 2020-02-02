@@ -19,25 +19,26 @@ module Main where
     import DemiGen.TileGen
 
     main :: IO ()
-    main = do
-        rooms <- allRooms
-        s     <- newPureMT
-        Right input <- readPng "./assets/sources/sewer.png"
-        let (pop1,s1) = randomTrees rooms 400 100 s
-            (dt,   s2) = geneticDungeon 100 (valtchanBrown 100) pop1 rooms s1
-            dg             = embiggenDungeon Special dt
-            biomes         = getBiomes dg
-            rules          = parseRules (convertRGB8 input) 15 withRotations
-            biomeSets      = biomesFromTemplate False 15 withRotations (utiles rules) (convertRGB8 input)
-            wave           = M.foldlWithKey (\w b set -> setBiomeInWave (M.findWithDefault [] b biomes) set w) M.empty biomeSets
-            heap           = M.foldlWithKey (\h c poss -> H.insert (getEntropy (frequencies rules) poss,c) h) H.empty wave :: EntropyHeap
-            wf             = WaveFunction wave M.empty heap
-            walled         = foldl' (\w c -> forceTile rules w 0 c) wf $ biomes M.! Wall
-            collapsed = generateUntilValid rules walled s2
-            vertical       = generateImage (\x y -> PixelRGB8 0 0 0) 1 15
-            horizontal     = generateImage (\x y -> PixelRGB8 0 0 0) (15+1) 1
-            squared        = [below [tx', horizontal] | tx <- utiles rules, let tx' = beside [tx, vertical]]
-        writePng "test1.png" $ makeImage squared collapsed 15
+    main = test
+  --  mein = do
+   --     rooms <- allRooms
+     --   s     <- newPureMT
+      --  Right input <- readPng "./assets/sources/sewer.png"
+       -- let (pop1,s1) = randomTrees rooms 400 100 s
+         --   (dt,   s2) = geneticDungeon 100 (valtchanBrown 100) pop1 rooms s1
+           -- dg             = embiggenDungeon Special dt
+            --biomes         = getBiomes dg
+           -- rules          = parseRules (convertRGB8 input) 15 withRotations
+ --           biomeSets      = biomesFromTemplate False 15 withRotations (utiles rules) (convertRGB8 input)
+   --         wave           = M.foldlWithKey (\w b set -> setBiomeInWave (M.findWithDefault [] b biomes) set w) M.empty biomeSets
+     --       heap           = M.foldlWithKey (\h c poss -> H.insert (getEntropy (frequencies rules) poss,c) h) H.empty wave :: EntropyHeap
+       --     wf             = WaveFunction wave M.empty heap
+        --    walled         = foldl' (\w c -> forceTile rules w 0 c) wf $ biomes M.! Wall
+     --       collapsed = generateUntilValid rules walled s2
+      --      vertical       = generateImage (\x y -> PixelRGB8 0 0 0) 1 15
+       --     horizontal     = generateImage (\x y -> PixelRGB8 0 0 0) (15+1) 1
+        --    squared        = [below [tx', horizontal] | tx <- utiles rules, let tx' = beside [tx, vertical]]
+       -- writePng "test1.png" $ makeImage squared collapsed 15
 
     getBiomes :: Dungeon -> Map Cell [CoOrd]
     getBiomes = M.foldlWithKey' (\m c b -> M.insertWith (++) b [c] m) M.empty

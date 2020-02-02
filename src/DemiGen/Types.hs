@@ -125,20 +125,12 @@ module DemiGen.Types where
     data Room = Room
         { rType :: RoomType 
         , tiles :: Set CoOrd
-        , doors :: [(CoOrd, Connection Int)]
+        , doors :: [CoOrd]
         } deriving (Show)
 
-    data Connection a = To a | Open deriving (Show, Ord)
-
-    fromTo :: Connection a -> a
-    fromTo (To x) = x
 
     data Tree a = Tree a [Tree a]
 
-    instance (Ord a) => Eq (Connection a)  where
-        (==) Open Open       = True
-        (==) (To a) (To b)   = a == b
-        (==) _ _             = False
 
 
     data Cell = Empty | Occupied | Conn | Wall | Floor | Door
@@ -152,6 +144,12 @@ module DemiGen.Types where
         } deriving (Show)
 
     type DungeonTree = Map Int Node
+
+    data Genome = Genome
+        { tree :: DungeonTree
+        , dungeon :: Dungeon
+        , connections :: Map CoOrd (Set Int)
+        }
 
     alterRoom :: DungeonTree -> Int -> Room -> DungeonTree
     alterRoom t id r =
@@ -171,13 +169,6 @@ module DemiGen.Types where
 
     getChildren :: DungeonTree -> Int -> Set Int
     getChildren t id = children $ t M.! id 
-
-    getConnections :: DungeonTree -> Int -> [Int]
-    getConnections t i =
-        map (\(To a) -> a)
-        $ filter (\c -> c /= Open)
-        $ map snd
-        $ doors $ room $ t M.! i
 
     getParent :: DungeonTree -> Int -> Int
     getParent t 0 = 0
@@ -231,22 +222,22 @@ module DemiGen.Types where
         (Node (Room rt tia da) ca) = t M.! a
         (Node (Room _  tib db) cb) = t M.! b
         tiles = S.union tia tib
-        doors = filter (\(_,c) -> (c /= To a) && (c /= To b)) $ da ++ db
+        doors = da ++ db
         conns = S.delete b $ S.union ca cb
 
-    mergeHalls :: DungeonTree -> DungeonTree
-    mergeHalls t
-        | unfused == [] = t
-        | otherwise     = mergeHalls fusePass
+    mergeHalls :: Genome -> Genome
+    mergeHalls g@Genome{..}
+        | unfused == [] = g
+        | otherwise     = mergeHalls (Genome fusePass dungeon connections)
       where
-        unfused = reverse $ M.keys $ M.filter (\(Node (Room rt _ _) cs) -> rt == Hall && hasChildHall cs) t
-        hasChildHall conns = or $ map (\c -> (rType $ room $ t M.! c) == Hall) $ S.toList conns
-        tryFuse tx i = case children <$> t M.!? i of
+        unfused = reverse $ M.keys $ M.filter (\(Node (Room rt _ _) cs) -> rt == Hall && hasChildHall cs) tree
+        hasChildHall conns = or $ map (\c -> (rType $ room $ tree M.! c) == Hall) $ S.toList conns
+        tryFuse tx i = case children <$> tree M.!? i of
             Nothing -> tx
             Just cs -> 
                 foldl' (\txx ci -> mergeNodes txx i ci) tx
                 $ S.filter (\ci -> (rType $ room $ tx M.! ci) == Hall) cs
-        fusePass = foldl' tryFuse t unfused
+        fusePass = foldl' tryFuse tree unfused
 
 
     doorPixel :: PixelRGB8
