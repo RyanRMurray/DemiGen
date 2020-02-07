@@ -28,7 +28,7 @@ dependencies:
 - unordered-containers
 - JuicyPixels
 - JuicyPixels-extra
-- JuicyPixels-repa
+- time
 - ghc
 - split
 - heap

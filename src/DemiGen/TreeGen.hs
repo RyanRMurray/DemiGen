@@ -90,7 +90,6 @@ module DemiGen.TreeGen where
     noCollision d Room{..} (ox,oy) = 
         and [M.notMember (x+ox,y+oy) d| (x,y) <- S.toList tiles]
     
-    isFree d c = d M.!? c /= Just Occupied
         
     insertRoom :: Dungeon -> (Room, (Maybe CoOrd)) -> Dungeon
     insertRoom dg (r,Nothing) = S.foldl (\dg c -> M.insert c Occupied dg) dg (tiles r)
@@ -357,6 +356,17 @@ module DemiGen.TreeGen where
                            $ foldl' (\s ci -> S.union s $ M.findWithDefault S.empty ci (connections merged)) S.empty (doors pRoom)
             cTypes       = S.toList $ S.map (\ci -> rType $ room (tree merged M.! ci)) connected
             normalReward = (filter (==Hall) cTypes) /= [] && (filter (/=Hall) cTypes) /= []
+
+
+    density :: Int -> Int -> DungeonTree -> Int
+    density req maxi t 
+        | M.size rs < req  = M.size rs 
+        | M.size rs > maxi = 0
+        | otherwise        = 10000 - (area - M.size dg)
+      where
+        (Genome rs dg _)      = treeToGenome None t
+        (minx,miny,maxx,maxy) = getBounds (M.keys dg) (-5,-5,0,0)
+        area                  = (maxx + abs minx) * (maxy + abs miny)
 
 
 --Prepare dungeon for room content generation

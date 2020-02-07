@@ -175,7 +175,7 @@ module DemiGen.TileGen where
     collapseWave rules@Rules{..} wf s
         | (M.size $ input wf) == 0 = Right $ output wf
         | otherwise               = do
-            (next, wf1) <- trace (show $ M.size $ input wf) selectNextCoOrd wf s
+            (next, wf1) <- selectNextCoOrd wf s
             (wf2,s2)    <- observePixel rules wf1 s next
             let settledWave = propagate rules wf2 (S.singleton next) S.empty
             collapseWave rules (deleteObserved settledWave next) s2
@@ -194,7 +194,7 @@ module DemiGen.TileGen where
 
     generateUntilValid :: Rules -> WaveFunction -> PureMT -> Grid
     generateUntilValid r w s =
-        case collapseWave r w s of
+        case trace ("generating map of size "++ show (M.size $ input w))(collapseWave r w s) of
             Left sn -> trace ("failed") $ generateUntilValid r w sn
             Right g -> g
 
