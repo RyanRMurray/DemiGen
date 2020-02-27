@@ -47,7 +47,7 @@ module DemiGen.TileGen where
         | x <- [0,n.. imageWidth img - 1]
         , y <- [0,n.. imageHeight img - 1]
         ]
-
+    
     --get frequency of appearances by unique tiles
     getTileFrequencies :: [TileImg] -> [TileImg] -> TileFreqs
     getTileFrequencies unique tiles =

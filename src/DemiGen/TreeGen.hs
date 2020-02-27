@@ -326,12 +326,19 @@ module DemiGen.TreeGen where
         !(child2,s3)      = mutate rooms second first s2
 
 
-    targetSize :: Int -> DungeonTree -> Int
-    targetSize target t
+    roomNumber :: Int -> DungeonTree -> Int
+    roomNumber target t
         | s < target = s
         | otherwise  = 0
       where
-        s = M.size $ tree $ treeToGenome None t
+        s = M.size . tree . treeToGenome None $ t
+
+    bySize :: Int -> DungeonTree -> Int
+    bySize target t
+        | s < target = s
+        | otherwise  = 0
+      where 
+        s = M.size . dungeon . treeToGenome None $ t
 
 
     valtchanBrown :: Int -> DungeonTree -> Int

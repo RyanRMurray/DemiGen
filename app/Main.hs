@@ -48,10 +48,19 @@ module Main where
         50
         (density 50 100)
         None
-        "./assets/sources/sewer.png"
+        "./assets/sources/dungeon.png"
         withRotations 
 
-    options = [vbSewer, denseSewer]
+    sizeDungeon = Profile
+        400
+        100
+        50
+        (bySize 200)
+        None
+        "./assets/sources/dungeon.png"
+        withRotations
+
+    options = [vbSewer, denseSewer, sizeDungeon]
 
     getBiomes :: Dungeon -> Map Cell [CoOrd]
     getBiomes = M.foldlWithKey' (\m c b -> M.insertWith (++) b [c] m) M.empty
@@ -108,7 +117,8 @@ module Main where
         "=========================================================\n" ++
         "Select one of the following options;\n"                      ++
         "0 - Sewers using Valtchan-Brown inspired fitness\n"          ++
-        "1 - Dense Sewers\n"
+        "1 - Dense Sewers\n"                                          ++
+        "2 - Dungeons by size"
 
     main :: IO ()
     main = do
