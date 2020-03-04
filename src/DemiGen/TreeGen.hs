@@ -333,12 +333,16 @@ module DemiGen.TreeGen where
       where
         s = M.size . tree . treeToGenome None $ t
 
-    bySize :: Int -> DungeonTree -> Int
-    bySize target t
+    roomNumBounded :: Int -> DungeonTree -> Int
+    roomNumBounded target t
         | s < target = s
         | otherwise  = 0
       where 
-        s = M.size . dungeon . treeToGenome None $ t
+        s = M.size . tree . treeToGenome None $ t
+
+    roomNum :: DungeonTree -> Int
+    roomNum = M.size . tree . (treeToGenome None)
+
 
 
     valtchanBrown :: Int -> DungeonTree -> Int
@@ -351,7 +355,7 @@ module DemiGen.TreeGen where
         merged   = mergeHalls resolved
         nums     = M.foldl' (\m (Node (Room rt _ _) _) -> M.insertWith (+) rt 1 m) M.empty (tree resolved)
         scoreRoom i 
-            | pType == Hall && (length cTypes) < 3        = 0
+            | pType == Hall && (length cTypes) < 3        = -5
             | pType == Hall                               = (*) 10 $ length $ take 5 cTypes
             | pType == Normal && normalReward             = 50
             | pType == Special  = 50
@@ -365,15 +369,16 @@ module DemiGen.TreeGen where
             normalReward = (filter (==Hall) cTypes) /= [] && (filter (/=Hall) cTypes) /= []
 
 
-    density :: Int -> Int -> DungeonTree -> Int
-    density req maxi t 
+    density :: Int -> DungeonTree -> Int
+    density req t 
         | M.size rs < req  = M.size rs 
-        | M.size rs > maxi = 0
-        | otherwise        = 10000 - (area - M.size dg)
+        | otherwise        = 999999999 - area
       where
         (Genome rs dg _)      = treeToGenome None t
         (minx,miny,maxx,maxy) = getBounds (M.keys dg) (-5,-5,0,0)
-        area                  = (maxx + abs minx) * (maxy + abs miny)
+        area                  = (^) 
+                                (max (maxx + abs minx)  (maxy + abs miny))
+                                (2)
 
 
 --Prepare dungeon for room content generation

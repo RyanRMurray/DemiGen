@@ -39,23 +39,23 @@ module Main where
         100
         (valtchanBrown 100)
         Special
-        "./assets/sources/sewer.png"
-        withRotations  
+        "./assets/sources/cave.png"
+        [noTransform]  
 
     denseSewer = Profile
         400
         100
-        50
-        (density 50 100)
+        40
+        (density 300)
         None
         "./assets/sources/dungeon.png"
-        withRotations 
+        [noTransform, flipVertically] 
 
     sizeDungeon = Profile
         400
         100
         50
-        (bySize 200)
+        roomNum
         None
         "./assets/sources/dungeon.png"
         withRotations
