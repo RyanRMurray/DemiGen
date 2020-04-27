@@ -88,7 +88,7 @@ module DemiGen.TreeGen where
 
     noCollision :: Dungeon -> Room -> Bool
     noCollision d Room{..} = 
-      and $ map (\t -> M.notMember t d) $ S.toList tiles
+      0 == (S.size . S.filter (\t -> M.member t d)) tiles
     
         
     insertRoom :: Dungeon -> (Room, (Maybe CoOrd)) -> Dungeon
@@ -105,7 +105,7 @@ module DemiGen.TreeGen where
         (\(newD, newChild) -> 
           Just $ Genome
             (M.insert cid (Node newChild S.empty) $ addChildren tree pid (S.singleton cid))
-            (foldl' (\nd conn -> M.insert conn Conn nd) newD $ new_conns newChild)
+            newD
             (foldl' (\c d -> M.insertWith (S.union) d (S.singleton cid) c) connections $ doors newChild)
         )
       where
@@ -113,7 +113,7 @@ module DemiGen.TreeGen where
         offsets   =  [ (offsetRoom r (px-cx) (py-cy), Just (px,py)) 
                      | r <- rotations
                      , (cx,cy) <- doors r
-                     , (px,py) <- doors parent
+                     , (px,py) <- filter (\door -> M.notMember door dungeon) $ doors parent
                      , dungeon M.!? (cx,cy) /= Just Occupied
                      ]
         new_conns ch = L.intersect (doors ch) (M.keys connections)

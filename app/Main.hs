@@ -36,17 +36,17 @@ module Main where
     vbSewer = Profile
         400
         100
-        100
+        200
         (valtchanBrown 100)
         Special
-        "./assets/sources/cave.png"
-        [noTransform]  
+        "./assets/sources/sewer.png"
+        withRotations
 
     denseSewer = Profile
         400
         100
         200
-        (density 75)
+        (density 200)
         None
         "./assets/sources/cave.png"
         withRotations 
@@ -54,7 +54,7 @@ module Main where
     sizeDungeon = Profile
         400
         100
-        50
+        60
         roomNum
         None
         "./assets/sources/dungeon.png"
