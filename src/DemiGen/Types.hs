@@ -59,6 +59,8 @@ module DemiGen.Types where
         nminy = min y miny
         nmaxy = max y maxy
 
+    data Test a = Test a [Test a] deriving (Show)
+
 --Types and globals for TileGen
     type Pix = PixelRGB8
     type TileImg = Image Pix                        --Type of image to import and export
@@ -157,6 +159,7 @@ module DemiGen.Types where
       where
         (Node _ cons) = t M.! id
     
+
     getRoom :: DungeonTree -> Int -> Maybe Room
     getRoom t id =
         room <$> t M.!? id

@@ -84,11 +84,11 @@ module DemiGen.TreeGen where
     offsetRoom :: Room -> Int -> Int -> Room
     offsetRoom Room{..} ox oy = Room rType
         (S.map (\(x,y) -> (x+ox,y+oy)) tiles)
-        (L.map (\(x,y) -> (x+ox,y+oy)) doors)
+        (map (\(x,y) -> (x+ox,y+oy)) doors)
 
-    noCollision :: Dungeon -> Room -> CoOrd -> Bool
-    noCollision d Room{..} (ox,oy) = 
-        and [M.notMember (x+ox,y+oy) d| (x,y) <- S.toList tiles]
+    noCollision :: Dungeon -> Room -> Bool
+    noCollision d Room{..} = 
+      and $ map (\t -> M.notMember t d) $ S.toList tiles
     
         
     insertRoom :: Dungeon -> (Room, (Maybe CoOrd)) -> Dungeon
@@ -99,28 +99,31 @@ module DemiGen.TreeGen where
         where
             d2 = S.foldl (\dg c -> M.insert c Occupied dg) dg (tiles r)
 
-
     insertChildRoom :: Genome -> (Room, Int) -> (Room, Int) -> Maybe Genome
-    insertChildRoom Genome{..} (parent, pid) (child, cid) = do
-        let rotations = [rotateRoom child rot | rot <- [0..3]]
-            offsets   = [ (offsetRoom r (px-cx) (py-cy), Just (px,py)) 
-                        | r <- rotations
-                        , (cx,cy) <- doors r
-                        , (px,py) <- doors parent
-                        , dungeon M.!? (cx,cy) /= Just Occupied
-                        ]
-        (newD, newChild) <- msum $ map (attemptAttach dungeon) offsets
-        let conn      = head $ L.intersect (doors parent) (doors newChild)
-        Just $ Genome
+    insertChildRoom Genome{..} (parent, pid) (child, cid) = 
+        (msum $ map (attemptAttach dungeon) offsets) >>=
+        (\(newD, newChild) -> 
+          Just $ Genome
             (M.insert cid (Node newChild S.empty) $ addChildren tree pid (S.singleton cid))
-            newD
+            (foldl' (\nd conn -> M.insert conn Conn nd) newD $ new_conns newChild)
             (foldl' (\c d -> M.insertWith (S.union) d (S.singleton cid) c) connections $ doors newChild)
+        )
+      where
+        rotations = [rotateRoom child rot | rot <- [0..3]]
+        offsets   =  [ (offsetRoom r (px-cx) (py-cy), Just (px,py)) 
+                     | r <- rotations
+                     , (cx,cy) <- doors r
+                     , (px,py) <- doors parent
+                     , dungeon M.!? (cx,cy) /= Just Occupied
+                     ]
+        new_conns ch = L.intersect (doors ch) (M.keys connections)
 
 
-    attemptAttach :: Dungeon -> (Room, Maybe CoOrd) -> Maybe (Dungeon, Room)
-    attemptAttach d (r,at) 
-        | noCollision d r (0,0) = Just (insertRoom d (r,at), r)
-        | otherwise             = Nothing
+
+    attemptAttach :: Dungeon ->  (Room, Maybe CoOrd) -> Maybe (Dungeon, Room)
+    attemptAttach d (r,at)
+        | noCollision d r = Just (insertRoom d (r,at), r)
+        | otherwise         = Nothing
 
           
 --random tree generator
@@ -282,7 +285,7 @@ module DemiGen.TreeGen where
         res     = resolveTree deadend t (Genome startOTree startDG startConns) 0 startChildren []
 
 
---various fitness functions
+--main generation functions
 ---------------------------------------------------------------------------------------------------
     
     geneticDungeon :: Int -> (DungeonTree -> Int) -> [DungeonTree] -> [Room] -> PureMT -> (DungeonTree, PureMT)
@@ -326,24 +329,9 @@ module DemiGen.TreeGen where
         !(child2,s3)      = mutate rooms second first s2
 
 
-    roomNumber :: Int -> DungeonTree -> Int
-    roomNumber target t
-        | s < target = s
-        | otherwise  = 0
-      where
-        s = M.size . tree . treeToGenome None $ t
 
-    roomNumBounded :: Int -> DungeonTree -> Int
-    roomNumBounded target t
-        | s < target = s
-        | otherwise  = 0
-      where 
-        s = M.size . tree . treeToGenome None $ t
-
-    roomNum :: DungeonTree -> Int
-    roomNum = M.size . tree . (treeToGenome None)
-
-
+--various fitness functions
+---------------------------------------------------------------------------------------------------
 
     valtchanBrown :: Int -> DungeonTree -> Int
     valtchanBrown max t
@@ -376,10 +364,25 @@ module DemiGen.TreeGen where
       where
         (Genome rs dg _)      = treeToGenome None t
         (minx,miny,maxx,maxy) = getBounds (M.keys dg) (-5,-5,0,0)
-        area                  = (^) 
-                                (max (maxx + abs minx)  (maxy + abs miny))
-                                (2)
+        area = (max (maxx + abs minx)  (maxy + abs miny)) ^ 2
 
+
+    roomNumber :: Int -> DungeonTree -> Int
+    roomNumber target t
+        | s < target = s
+        | otherwise  = 0
+      where
+        s = M.size . tree . treeToGenome None $ t
+
+    roomNumBounded :: Int -> DungeonTree -> Int
+    roomNumBounded target t
+        | s < target = s
+        | otherwise  = 0
+      where 
+        s = M.size . tree . treeToGenome None $ t
+
+    roomNum :: DungeonTree -> Int
+    roomNum = M.size . tree . (treeToGenome None)
 
 --Prepare dungeon for room content generation
 ---------------------------------------------------------------------------------------------------

@@ -45,11 +45,11 @@ module Main where
     denseSewer = Profile
         400
         100
-        40
-        (density 300)
+        200
+        (density 75)
         None
-        "./assets/sources/dungeon.png"
-        [noTransform, flipVertically] 
+        "./assets/sources/cave.png"
+        withRotations 
 
     sizeDungeon = Profile
         400

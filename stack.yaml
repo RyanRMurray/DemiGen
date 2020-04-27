@@ -65,6 +65,6 @@ extra-deps:
 #
 # Allow a newer minor version of GHC than the snapshot specifies
 # compiler-check: newer-minor
-#build:
-#  library-profiling: true
-#  executable-profiling: true
+build:
+  library-profiling: true
+  executable-profiling: true
