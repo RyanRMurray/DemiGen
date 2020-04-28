@@ -384,6 +384,21 @@ module DemiGen.TreeGen where
     roomNum :: DungeonTree -> Int
     roomNum = M.size . tree . (treeToGenome None)
 
+    --set number of special rooms at least [target] steps away from start.
+    --Awarded by number of specials, then closeness to target.
+    specialRooms :: Int -> Int -> DungeonTree -> Int
+    specialRooms num target t
+        | length specials > num = 0
+        | length specials < num = length specials
+        | target_steps < num = (sum steps) + 100 * target_steps + 1
+        | otherwise = 999999999 - dist_from_target
+      where
+        (Genome placed _ _) = treeToGenome Special t
+        specials = M.keys $ M.delete 0 $ M.filter (\(Node (Room r_type _ _) _) -> r_type == Special) placed
+        steps = map (\s -> length . fst . (span (notElem s)) $ traceIDs placed [0]) specials
+        target_steps = length (filter (>target) steps)
+        dist_from_target = sum $ map (\s -> abs (target - s)) steps
+
 --Prepare dungeon for room content generation
 ---------------------------------------------------------------------------------------------------
 

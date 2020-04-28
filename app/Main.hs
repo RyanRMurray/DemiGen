@@ -33,34 +33,34 @@ module Main where
         }
 
 
-    vbSewer = Profile
-        400
-        100
-        200
-        (valtchanBrown 100)
-        Special
-        "./assets/sources/sewer.png"
-        withRotations
-
     denseSewer = Profile
         400
         100
-        200
-        (density 200)
+        50
+        (density 75)
         None
+        "./assets/sources/sewer_capped.png"
+        withRotations
+
+    caveSpecials = Profile
+        400
+        100
+        50
+        (specialRooms 4 20)
+        Special
         "./assets/sources/cave.png"
         withRotations 
 
     sizeDungeon = Profile
         400
         100
-        60
-        roomNum
+        50
+        (roomNumBounded 70)
         None
-        "./assets/sources/dungeon.png"
+        "./assets/sources/sewer_capped.png"
         withRotations
 
-    options = [vbSewer, denseSewer, sizeDungeon]
+    options = [denseSewer, caveSpecials, sizeDungeon]
 
     getBiomes :: Dungeon -> Map Cell [CoOrd]
     getBiomes = M.foldlWithKey' (\m c b -> M.insertWith (++) b [c] m) M.empty
@@ -116,9 +116,9 @@ module Main where
         "DEMIGEN - EVOLVING DUNGEON GENERATOR\n"                      ++
         "=========================================================\n" ++
         "Select one of the following options;\n"                      ++
-        "0 - Sewers using Valtchan-Brown inspired fitness\n"          ++
-        "1 - Dense Sewers\n"                                          ++
-        "2 - Dungeons by size"
+        "0 - Dense Sewers\n"          ++
+        "1 - Four Special Rooms Caves\n"                                          ++
+        "2 - Dungeons by Size"
 
     main :: IO ()
     main = do

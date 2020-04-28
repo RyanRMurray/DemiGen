@@ -192,7 +192,7 @@ module DemiGen.Types where
 
     traceIDs :: DungeonTree -> [Int] -> [[Int]]
     traceIDs t tocheck
-        | children == [] = []
+        | children == [] = [tocheck]
         | otherwise = tocheck : traceIDs t children
       where
         children = concat $ map (S.toList . getChildren t) tocheck
@@ -248,7 +248,6 @@ module DemiGen.Types where
             | M.member p (tree g) && M.member c (tree g) = mergeInGenome g p c
             | otherwise                                  = g 
         fuseChildren g (p,cs) = foldl' (fuse p) g cs
-
 
     doorPixel :: PixelRGB8
     doorPixel = PixelRGB8 255 0 0
