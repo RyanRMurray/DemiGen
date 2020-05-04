@@ -8,9 +8,14 @@ module Main where
     import Data.Set (Set)
     import Data.List
     import           Data.Ord
-    import Data.Word
 
-    import System.CPUTime
+    import Text.Read
+    import Data.Maybe
+
+    import Data.Word
+    import Control.Exception
+    import Data.Time.Clock.System
+    import Data.Bits.Extras
 
     import           System.Random.Mersenne.Pure64
     import           System.Random.Shuffle
@@ -36,31 +41,89 @@ module Main where
     denseSewer = Profile
         400
         100
-        50
-        (density 75)
+        40
+        (density 45)
         None
-        "./assets/sources/sewer_capped.png"
+        "./assets/sources/cave.png"
         withRotations
 
     caveSpecials = Profile
         400
         100
-        50
+        40
         (specialRooms 4 20)
         Special
-        "./assets/sources/cave.png"
+        "./assets/sources/sewer_capped.png"
         withRotations 
 
     sizeDungeon = Profile
         400
         100
-        50
-        (roomNumBounded 70)
+        20
+        (roomNumBounded 30)
         None
-        "./assets/sources/sewer_capped.png"
+        "./assets/sources/dungeon.png"
         withRotations
+    
 
-    options = [denseSewer, caveSpecials, sizeDungeon]
+    options   = [denseSewer, caveSpecials, sizeDungeon]
+    
+    functionOptions :: Int -> Int -> [DungeonTree -> Int]
+    functionOptions a b = [density a, roomNumber a, roomNumBounded a, roomNum, specialRooms a b]
+
+    templateOptions = ["./assets/sources/dungeon.png", "./assets/sources/sewer_capped.png", "./assets/sources/cave.png"]
+
+    parseN :: Read a => a -> String -> a
+    parseN def str = fromMaybe def $ readMaybe str
+
+
+    createProfile :: IO Profile
+    createProfile = do
+        putStrLn templateMenuText
+        t <- getLine
+        putStrLn functionMenuText
+        f <- getLine
+        putStrLn "Enter N (default 0):"
+        n <- parseN 0 <$> getLine
+        putStrLn "Enter M (default 0):"
+        m <- parseN 0 <$> getLine
+        putStrLn "Enter Generation number (default 20):"
+        gens <- parseN 20 <$> getLine
+        return $ Profile 
+            400
+            100
+            gens
+            ((functionOptions n m) !! (read f))
+            None
+            (templateOptions !! (read t))
+            withRotations
+
+
+    menuText :: String
+    menuText = 
+        "=========================================================\n" ++
+        "DEMIGEN - EVOLVING DUNGEON GENERATOR\n"                      ++
+        "=========================================================\n" ++
+        "Select one of the following options;\n"                      ++
+        "0 - Dense Sewers\n"                                          ++
+        "1 - Four Special Rooms Caves\n"                              ++
+        "2 - Dungeons by Size\n"                                      ++
+        "3 - Customized Dungeon\n" 
+
+    functionMenuText = 
+        "Select a Fitness function;\n"                                                                        ++
+        "0 - Density: Fit N rooms into as small a footprint as possible\n"                                    ++
+        "1 - Room Number: Generate a dungeon with at least N rooms\n"                                         ++
+        "2 - Bounded Room Number: Generate a dungeon with exactly N rooms\n"                                  ++
+        "3 - Size: Generate a dungeon with as many rooms as possible\n"                                       ++
+        "4 - Special Rooms: generate a dungeon with N special rooms at least M steps away from the centre\n"
+
+    templateMenuText = 
+        "Select a thematic style;\n" ++
+        "0 - Generic Dungeon\n" ++
+        "1 - Sewer System\n"    ++
+        "2 - Cave Network\n"
+
 
     getBiomes :: Dungeon -> Map Cell [CoOrd]
     getBiomes = M.foldlWithKey' (\m c b -> M.insertWith (++) b [c] m) M.empty
@@ -110,23 +173,20 @@ module Main where
         writePng (name ++ ".png") result
 
 
-    menuText :: String
-    menuText = 
-        "=========================================================\n" ++
-        "DEMIGEN - EVOLVING DUNGEON GENERATOR\n"                      ++
-        "=========================================================\n" ++
-        "Select one of the following options;\n"                      ++
-        "0 - Dense Sewers\n"          ++
-        "1 - Four Special Rooms Caves\n"                                          ++
-        "2 - Dungeons by Size"
-
     main :: IO ()
     main = do
         putStrLn menuText
         selected <- getLine
+        prof <- optionSelect (read selected)
+        putStrLn "Enter seed (default random seed);"
+        defaultSeed <- w64 . systemNanoseconds <$> getSystemTime
+        seed <- parseN defaultSeed <$> getLine
         putStrLn "Enter output file name;"
         outName  <- getLine
-        putStrLn "Enter seed;"
-        seed <- getLine
-        generateFromProfile (options !! (read selected)) outName (pureMT $ read seed)
-    
+        putStrLn $ "Generating with the seed " ++ (show seed) ++ ". This may take several minutes."
+        generateFromProfile prof outName (pureMT seed)
+      where
+        optionSelect o
+            | o /= 3    = return $ options !! o
+            | otherwise = createProfile
+        

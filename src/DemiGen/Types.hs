@@ -15,7 +15,6 @@ module DemiGen.Types where
 
     import           System.Random.Mersenne.Pure64
     import           System.Random.Shuffle
-    import Debug.Trace
 
 
 --Random selection
