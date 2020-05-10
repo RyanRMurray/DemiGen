@@ -16,6 +16,7 @@ module Main where
     import Control.Exception
     import Data.Time.Clock.System
     import Data.Bits.Extras
+    import System.Environment
 
     import           System.Random.Mersenne.Pure64
     import           System.Random.Shuffle
@@ -44,7 +45,7 @@ module Main where
         40
         (density 45)
         None
-        "./assets/sources/cave.png"
+        "./assets/sources/sewer_capped.png"
         withRotations
 
     caveSpecials = Profile
@@ -53,7 +54,7 @@ module Main where
         40
         (specialRooms 4 20)
         Special
-        "./assets/sources/sewer_capped.png"
+        "./assets/sources/cave.png"
         withRotations 
 
     sizeDungeon = Profile
@@ -171,6 +172,7 @@ module Main where
             squaredTiles = [below [tx', horizontal] | tx <- utiles rules, let tx' = beside [tx, vertical]]
             result       = makeImage squaredTiles collapsed 15
         writePng (name ++ ".png") result
+
 
 
     main :: IO ()

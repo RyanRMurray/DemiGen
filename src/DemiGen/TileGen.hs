@@ -164,21 +164,21 @@ module DemiGen.TileGen where
     settleWave :: Rules -> WaveFunction -> Set CoOrd -> WaveFunction
     settleWave Rules{..} WaveFunction{..} updated =
         WaveFunction input output
-        $ foldl'   (\h (u,e) -> H.insert (u,e) h)               heap 
+        $ foldl'   (\h (u,e) -> H.insert (u,e) h) heap 
         $ map      (\(u, vs) -> (getEntropy frequencies vs, u)) 
-        $ S.foldl' (\l u     -> (u, input M.! u) : l)           [] updated
+        $ S.foldl' (\l u     -> (u, input M.! u) : l) [] updated
 
     deleteObserved :: WaveFunction -> CoOrd -> WaveFunction
     deleteObserved WaveFunction{..} at = WaveFunction (M.delete at input) output heap
 
     collapseWave :: Rules -> WaveFunction -> PureMT -> Either PureMT Grid
-    collapseWave rules@Rules{..} wf s
+    collapseWave rules wf s
         | (M.size $ input wf) == 0 = Right $ output wf
         | otherwise               = do
-            (next, wf1) <- selectNextCoOrd wf s
-            (wf2,s2)    <- observePixel rules wf1 s next
-            let settledWave = propagate rules wf2 (S.singleton next) S.empty
-            collapseWave rules (deleteObserved settledWave next) s2
+            (next, wf1) <- selectNextCoOrd wf s          -- Select coordinate with the lowest entropy
+            (wf2,s2)    <- observePixel rules wf1 s next -- Assign that space a valid random tile
+            let settledWave = propagate rules wf2 (S.singleton next) S.empty -- Delete invalid neighbours and propagate
+            collapseWave rules (deleteObserved settledWave next) s2 -- Remove the collapsed tile form the wave then perform the next collapse
 
 --misc in/out functions
 ---------------------------------------------------------------------------------------------------
