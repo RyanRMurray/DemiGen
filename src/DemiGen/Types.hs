@@ -147,8 +147,8 @@ module DemiGen.Types where
     type DungeonTree = Map Int Node
 
     data Genome = Genome
-        { tree :: DungeonTree
-        , dungeon :: Dungeon
+        { tree        :: DungeonTree
+        , dungeon     :: Dungeon
         , connections :: Map CoOrd (Set Int)
         }
 
